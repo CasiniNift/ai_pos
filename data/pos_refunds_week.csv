@@ -1,0 +1,27 @@
+original_transaction_id,refund_date,refund_amount,refund_id,reason
+1261,2025-01-07,3.1700000000000004,RFD0,Wrong item
+1260,2025-01-07,2.2,RFD1,Wrong item
+1031,2025-01-01,2.75,RFD2,Wrong item
+1070,2025-01-02,3.08,RFD3,Wrong item
+1243,2025-01-07,3.85,RFD4,Customer complaint
+1086,2025-01-03,7.15,RFD5,Duplicate charge
+1121,2025-01-04,7.7,RFD6,Wrong item
+1094,2025-01-03,3.08,RFD7,Wrong item
+1236,2025-01-07,7.7,RFD8,Duplicate charge
+1146,2025-01-04,3.08,RFD9,Customer complaint
+1065,2025-01-02,2.75,RFD10,Duplicate charge
+1014,2025-01-01,3.85,RFD11,Duplicate charge
+1129,2025-01-04,7.15,RFD12,Wrong item
+1017,2025-01-01,7.15,RFD13,Duplicate charge
+1070,2025-01-02,7.7,RFD14,Duplicate charge
+1128,2025-01-04,7.15,RFD15,Wrong item
+1150,2025-01-05,3.85,RFD16,Wrong item
+1159,2025-01-05,7.15,RFD17,Wrong item
+1187,2025-01-05,3.85,RFD18,Wrong item
+1137,2025-01-04,2.75,RFD19,Duplicate charge
+1260,2025-01-07,3.08,RFD20,Duplicate charge
+1123,2025-01-04,3.52,RFD21,Customer complaint
+1173,2025-01-05,2.2,RFD22,Customer complaint
+1230,2025-01-07,3.85,RFD23,Duplicate charge
+1040,2025-01-02,3.85,RFD24,Customer complaint
+1116,2025-01-03,3.85,RFD25,Duplicate charge
