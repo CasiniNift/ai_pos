@@ -3,8 +3,14 @@ pandas>=2.0.0
 numpy>=1.24.0
 
 # UI
-gradio>=3.50.0
+gradio>=4.0.0
+
+# AI Integration - Claude (Anthropic)
+anthropic>=0.25.0
 
 # Optional but useful for dev
 jupyter
 notebook
+
+# Environment management
+python-dotenv>=1.0.0

@@ -1,76 +1,127 @@
-# src/app.py
-
 import gradio as gr
 import pandas as pd
-from analysis import cash_eaters, reorder_plan, free_up_cash, executive_snapshot
+from analysis import (
+    cash_eaters_with_ai, reorder_plan_with_ai, free_up_cash_with_ai, 
+    sales_impact_analysis_with_ai, executive_snapshot
+)
 from utils import (
     load_csv_from_uploads, persist_uploads_to_data_dir,
     validate_schema_or_raise, DEFAULT_SCHEMAS
 )
-
-# ---------- Helpers ----------
+from config import get_claude_key, validate_claude_key
+import os
 
 def _df_html(df, title=None):
-    """Render a DataFrame as HTML (or return empty string if None/empty)."""
     if df is None or getattr(df, "empty", True):
         return ""
     heading = f"<h4>{title}</h4>" if title else ""
     return heading + df.to_html(index=False, border=0, classes="table", justify="left")
 
+def _ai_response_html(ai_response):
+    if not ai_response or ai_response.startswith("AI Analysis Error"):
+        return f'<div style="background-color: #ffebee; padding: 10px; border-radius: 5px; color: #c62828;"><strong>⚠️ {ai_response}</strong></div>'
+    
+    return f'''
+    <div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #4caf50;">
+        <h4 style="color: #2e7d32; margin-top: 0;">🤖 AI Analysis</h4>
+        <div style="color: #1b5e20; line-height: 1.6;">{ai_response.replace(chr(10), "<br>")}</div>
+    </div>
+    '''
+
 def _reload_data_from_uploads(tx_u, rf_u, po_u, pm_u):
-    """Load DataFrames from uploaded files or return empty dict if none provided."""
     return load_csv_from_uploads(tx_u, rf_u, po_u, pm_u)
 
 def _apply_uploaded_data_to_runtime(dfs: dict):
-    """Persist uploads to /data and hot-reload analysis by reimporting it."""
     if not dfs:
         return "No files uploaded. Using existing /data files."
-    # Validate schemas (required columns)
     for key, df in dfs.items():
         validate_schema_or_raise(key, df, DEFAULT_SCHEMAS[key])
-    # Persist to /data/
     persist_uploads_to_data_dir(dfs)
-    # Hot-reload analysis so functions pick up new data immediately
     import importlib, analysis
     importlib.reload(analysis)
     return "✅ Data applied. Analysis reloaded."
 
-def run_action_html(action, budget):
-    """Route selected question → formatted HTML output."""
-    if action == "Cash Eaters":
-        snap, ce, low = cash_eaters()
-        html = snap
-        html += _df_html(ce, "Cash Eaters (Discounts / Refunds / Fees)")
-        html += _df_html(low, "Lowest-Margin SKUs")
-        return html
+def run_action_with_ai(action, budget, pos_api_key):
+    # Use Claude API key instead of OpenAI
+    from config import get_claude_key, validate_claude_key
+    
+    claude_key = get_claude_key()
+    
+    if claude_key and validate_claude_key(claude_key):
+        os.environ["ANTHROPIC_API_KEY"] = claude_key
+        try:
+            from analysis import ai_assistant
+            ai_assistant.set_api_key(claude_key)
+        except:
+            pass
+
+    if action == "What's eating my cash flow?":
+        try:
+            snap, ce, low, ai_analysis = cash_eaters_with_ai()
+            html = snap
+            html += _df_html(ce, "💸 Cash Eaters (Discounts / Refunds / Fees)")
+            html += _df_html(low, "📉 Lowest-Margin SKUs")
+            html += _ai_response_html(ai_analysis)  # AI Analysis at the bottom
+            return html
+        except Exception as e:
+            from analysis import cash_eaters
+            snap, ce, low = cash_eaters()
+            html = snap
+            html += _df_html(ce, "💸 Cash Eaters (Discounts / Refunds / Fees)")
+            html += _df_html(low, "📉 Lowest-Margin SKUs")
+            html += f'<div style="background-color: #fff3cd; padding: 10px; border-radius: 5px;"><strong>ℹ️ AI analysis unavailable: {str(e)}</strong></div>'
+            return html
 
     if action == "What should I reorder with budget?":
-        snap, msg, plan = reorder_plan(float(budget or 0))
-        html = snap + f"<p><b>{msg}</b></p>"
-        html += _df_html(plan, "Suggested Purchase Plan")
-        return html
+        try:
+            snap, msg, plan, ai_analysis = reorder_plan_with_ai(float(budget or 0))
+            html = snap + f"<p><b>{msg}</b></p>"
+            html += _df_html(plan, "🛒 Suggested Purchase Plan")
+            html += _ai_response_html(ai_analysis)  # AI Analysis at the bottom
+            return html
+        except Exception as e:
+            from analysis import reorder_plan
+            snap, msg, plan = reorder_plan(float(budget or 0))
+            html = snap + f"<p><b>{msg}</b></p>"
+            html += _df_html(plan, "🛒 Suggested Purchase Plan")
+            html += f'<div style="background-color: #fff3cd; padding: 10px; border-radius: 5px;"><strong>ℹ️ AI unavailable: {str(e)}</strong></div>'
+            return html
 
     if action == "How much cash can I free up?":
-        snap, msg, slow = free_up_cash()
-        html = snap + f"<p><b>{msg}</b></p>"
-        html += _df_html(slow, "Slow-Mover Clearance Estimate")
-        return html
+        try:
+            snap, msg, slow, ai_analysis = free_up_cash_with_ai()
+            html = snap + f"<p><b>{msg}</b></p>"
+            html += _df_html(slow, "🏷️ Slow-Mover Clearance Estimate")
+            html += _ai_response_html(ai_analysis)  # AI Analysis at the bottom
+            return html
+        except Exception as e:
+            from analysis import free_up_cash
+            snap, msg, slow = free_up_cash()
+            html = snap + f"<p><b>{msg}</b></p>"
+            html += _df_html(slow, "🏷️ Slow-Mover Clearance Estimate")
+            html += f'<div style="background-color: #fff3cd; padding: 10px; border-radius: 5px;"><strong>ℹ️ AI unavailable: {str(e)}</strong></div>'
+            return html
 
     if action == "If sales drop 10% next month, impact on runway?":
-        snap = executive_snapshot()
-        html = snap + "<p><i>Forecast model placeholder: would run a 4–12 week cash model with -10% sales.</i></p>"
-        return html
+        try:
+            snap, ai_analysis = sales_impact_analysis_with_ai(10)
+            html = snap
+            html += _ai_response_html(ai_analysis)  # AI Analysis at the bottom (only content here)
+            return html
+        except Exception as e:
+            snap = executive_snapshot()
+            html = snap
+            html += f'<div style="background-color: #fff3cd; padding: 10px; border-radius: 5px;"><strong>ℹ️ AI unavailable: {str(e)}</strong></div>'
+            html += "<p><i>📊 Forecast model placeholder: would run a 4–12 week cash model with -10% sales.</i></p>"
+            return html
 
     return executive_snapshot()
-
-# ---------- UI Layout ----------
 
 with gr.Blocks(title="AI POS – Cash Flow Assistant (POC)") as app:
     gr.Markdown("# AI POS – Cash Flow Assistant (POC)")
     gr.Markdown("Upload your POS data **or** paste an API key, choose a question, and get actionable insights.")
 
     with gr.Row():
-        # LEFT: Data inputs (with descriptions + format guide)
         with gr.Column(scale=1):
             with gr.Group():
                 gr.Markdown("### Data Input")
@@ -129,7 +180,6 @@ product_id,product_name,category,cogs
 - *Product Master* provides `cogs` to compute margins.
 """)
 
-        # RIGHT: Questions + Results (single panel)
         with gr.Column(scale=2):
             with gr.Group():
                 gr.Markdown("### Ask the Assistant")
@@ -146,30 +196,31 @@ product_id,product_name,category,cogs
                 budget = gr.Number(label="Budget (€)", value=500, visible=False)
                 run_btn = gr.Button("Run")
 
-            # One tidy results panel
             result_html = gr.HTML(label="Results")
 
-    # Toggle budget visibility based on question
     def _toggle_budget(q):
         return gr.update(visible=(q == "What should I reorder with budget?"))
     action.change(_toggle_budget, inputs=action, outputs=budget)
 
-    # Apply data uploads (and hot-reload analysis)
-    def _apply(api_key_val, txf, rff, pof, pmf):
+    def _apply(pos_api_key_val, txf, rff, pof, pmf):
         dfs = _reload_data_from_uploads(txf, rff, pof, pmf)
         return _apply_uploaded_data_to_runtime(dfs)
     apply_btn.click(_apply, inputs=[api_key, tx_u, rf_u, po_u, pm_u], outputs=[apply_msg])
 
-    # Route selected action → HTML output
-    def _route(q, b):
-        mapping = {
-            "What's eating my cash flow?": "Cash Eaters",
-            "What should I reorder with budget?": "What should I reorder with budget?",
-            "How much cash can I free up?": "How much cash can I free up?",
-            "If sales drop 10% next month, impact on runway?": "If sales drop 10% next month, impact on runway?"
-        }
-        return run_action_html(mapping[q], b)
-    run_btn.click(_route, inputs=[action, budget], outputs=[result_html])
+    run_btn.click(run_action_with_ai, inputs=[action, budget, api_key], outputs=[result_html])
+
+    def load_initial():
+        return run_action_with_ai("What's eating my cash flow?", 500, "")
+    app.load(load_initial, outputs=[result_html])
 
 if __name__ == "__main__":
+    print("🚀 Starting AI POS Cash Flow Assistant...")
+    
+    env_key = get_claude_key()
+    if env_key and validate_claude_key(env_key):
+        print("✅ AI analysis ready (Claude configured)")
+    else:
+        print("⚠️  AI analysis limited (Claude not configured)")
+        print("💡 Basic analytics still available")
+    
     app.launch(share=False, inbrowser=True)

@@ -1,7 +1,8 @@
-# src/analysis.py - This is the file for the buisness logic 
+# src/analysis.py - Enhanced with Claude AI integration
 import pandas as pd
 import numpy as np
 from utils import load_transactions, load_refunds, load_payouts, load_product_master
+from ai_assistant import CashFlowAIAssistant
 
 # Load data once at module import
 transactions = load_transactions()
@@ -9,12 +10,14 @@ refunds = load_refunds()
 payouts = load_payouts()
 products = load_product_master()
 
+# Initialize Claude AI assistant
+ai_assistant = CashFlowAIAssistant()
+
 # Merge product info (COGS)
 tx = transactions.merge(products[["product_id", "cogs"]], on="product_id", how="left")
 tx["unit_margin"] = tx["unit_price"] - tx["cogs"]
 tx["gross_profit"] = tx["quantity"] * tx["unit_margin"] - tx["discount"]
 tx["day"] = pd.to_datetime(tx["date"]).dt.date
-
 
 def executive_snapshot():
     """Return a simple HTML executive snapshot."""
@@ -22,7 +25,9 @@ def executive_snapshot():
     cash_sales = float(tx.loc[tx["payment_type"] == "CASH", "line_total"].sum())
 
     html = f"""
-    <h3>Snapshot ({tx['day'].min()} → {tx['day'].max()})</h3>
+    <h3>Executive Dashboard ({tx['day'].min()} → {tx['day'].max()})</h3>
+    
+    <h4>Key Metrics</h4>
     <ul>
       <li>Transactions: <b>{int(tx['transaction_id'].nunique())}</b></li>
       <li>Items sold: <b>{int(tx['quantity'].sum())}</b></li>
@@ -39,9 +44,8 @@ def executive_snapshot():
     """
     return html
 
-
-def cash_eaters():
-    """Show where cash is leaking + lowest margin SKUs."""
+def cash_eaters_with_ai():
+    """Show where cash is leaking + AI analysis"""
     ce = pd.DataFrame([
         {"category": "Discounts", "amount": float(tx["discount"].sum())},
         {"category": "Refunds", "amount": float(refunds["refund_amount"].sum())},
@@ -53,11 +57,22 @@ def cash_eaters():
     sku["margin_pct"] = np.where(sku["revenue"] > 0, sku["gp"] / sku["revenue"], 0.0)
     low = sku.sort_values(["margin_pct", "revenue"]).head(5)
 
-    return executive_snapshot(), ce, low
+    # Prepare data for AI analysis
+    business_context = ai_assistant._prepare_business_context(tx, refunds, payouts, products)
+    cash_eaters_data = {
+        'discounts': float(tx["discount"].sum()),
+        'refunds': float(refunds["refund_amount"].sum()),
+        'processor_fees': float(payouts["processor_fees"].sum()),
+        'low_margin_products': low.to_string()
+    }
+    
+    # Get AI analysis
+    ai_analysis = ai_assistant.analyze_cash_eaters(business_context, cash_eaters_data)
 
+    return executive_snapshot(), ce, low, ai_analysis
 
-def reorder_plan(budget=500.0):
-    """Suggest what to reorder with a given budget (greedy allocation)."""
+def reorder_plan_with_ai(budget=500.0):
+    """Suggest what to reorder with AI analysis"""
     days = (tx["day"].max() - tx["day"].min()).days + 1
     sku_daily = tx.groupby(["product_id", "product_name", "cogs"], as_index=False).agg(
         qty=("quantity", "sum"),
@@ -91,11 +106,21 @@ def reorder_plan(budget=500.0):
 
     plan_df = pd.DataFrame(plan)
     msg = f"Budget: €{budget:.0f} → Remaining: €{remaining:.2f}"
-    return executive_snapshot(), msg, plan_df
+    
+    # Prepare data for AI analysis
+    business_context = ai_assistant._prepare_business_context(tx, refunds, payouts, products)
+    reorder_data = {
+        'purchase_plan': plan_df.to_string() if not plan_df.empty else 'No recommendations within budget',
+        'remaining_budget': remaining
+    }
+    
+    # Get AI analysis
+    ai_analysis = ai_assistant.analyze_reorder_plan(business_context, reorder_data, budget)
+    
+    return executive_snapshot(), msg, plan_df, ai_analysis
 
-
-def free_up_cash():
-    """Estimate extra cash if we discount slow movers."""
+def free_up_cash_with_ai():
+    """Estimate extra cash with AI analysis"""
     days = (tx["day"].max() - tx["day"].min()).days + 1
     sku_daily = tx.groupby(["product_id", "product_name"], as_index=False).agg(qty=("quantity", "sum"))
     sku_daily["qty_per_day"] = sku_daily["qty"] / days
@@ -111,4 +136,35 @@ def free_up_cash():
 
     total = float(slow["extra_cash_inflow"].sum())
     msg = f"Estimated extra cash this week from clearance: €{total:.2f}"
-    return executive_snapshot(), msg, slow
+    
+    # Prepare data for AI analysis
+    business_context = ai_assistant._prepare_business_context(tx, refunds, payouts, products)
+    clearance_data = {
+        'total_extra_cash': total,
+        'slow_movers': slow.to_string()
+    }
+    
+    # Get AI analysis
+    ai_analysis = ai_assistant.analyze_cash_liberation(business_context, clearance_data)
+    
+    return executive_snapshot(), msg, slow, ai_analysis
+
+def sales_impact_analysis_with_ai(sales_drop_percent=10):
+    """Analyze impact of sales drop with AI"""
+    business_context = ai_assistant._prepare_business_context(tx, refunds, payouts, products)
+    ai_analysis = ai_assistant.analyze_sales_impact(business_context, sales_drop_percent)
+    
+    return executive_snapshot(), ai_analysis
+
+# Backward compatibility - keep original functions
+def cash_eaters():
+    snap, ce, low, _ = cash_eaters_with_ai()
+    return snap, ce, low
+
+def reorder_plan(budget=500.0):
+    snap, msg, plan, _ = reorder_plan_with_ai(budget)
+    return snap, msg, plan
+
+def free_up_cash():
+    snap, msg, slow, _ = free_up_cash_with_ai()
+    return snap, msg, slow
