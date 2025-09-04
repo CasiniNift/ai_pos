@@ -114,10 +114,20 @@ PRODUCT CATALOG:
         except Exception as e:
             return f"AI Analysis Error: {str(e)}. Please check your Claude API key and try again."
     
-    def analyze_cash_eaters(self, business_context: str, cash_eaters_data: Dict) -> str:
+    def _get_language_instruction(self, language: str) -> str:
+        """Get language-specific instruction for AI responses"""
+        instructions = {
+            "italian": "Rispondi SEMPRE in italiano. Usa un tono professionale ma colloquiale, come se stessi consigliando direttamente un imprenditore italiano. Usa terminologia finanziaria appropriata in italiano.",
+            "spanish": "Responde SIEMPRE en español. Usa un tono profesional pero conversacional, como si estuvieras aconsejando directamente a un empresario español. Usa terminología financiera apropiada en español.",
+            "english": "Respond in English with a professional but conversational tone, like you're advising a business owner directly."
+        }
+        return instructions.get(language, instructions["english"])
+    
+    def analyze_cash_eaters(self, business_context: str, cash_eaters_data: Dict, language: str = "english") -> str:
         """AI analysis of what's eating cash flow"""
         
-        system_prompt = "You are an expert retail financial advisor who gives clear, actionable advice."
+        language_instruction = self._get_language_instruction(language)
+        system_prompt = f"You are an expert retail financial advisor who gives clear, actionable advice. {language_instruction}"
         
         user_prompt = f"""
 Analyze the following business data and cash flow issues:
@@ -136,16 +146,15 @@ Provide a concise analysis answering "What's eating my cash flow?" Include:
 1. The biggest cash drain (2-3 sentences)
 2. Specific actionable recommendations (3-4 bullet points)
 3. Quick wins to improve cash flow this week
-
-Keep the tone professional but conversational, like you're advising a business owner directly.
 """
         
         return self._make_claude_request(system_prompt, user_prompt)
     
-    def analyze_reorder_plan(self, business_context: str, reorder_data: Dict, budget: float) -> str:
+    def analyze_reorder_plan(self, business_context: str, reorder_data: Dict, budget: float, language: str = "english") -> str:
         """AI analysis of reorder recommendations"""
         
-        system_prompt = "You are an expert inventory management advisor for retail businesses."
+        language_instruction = self._get_language_instruction(language)
+        system_prompt = f"You are an expert inventory management advisor for retail businesses. {language_instruction}"
         
         user_prompt = f"""
 Based on this business data, analyze the reorder plan:
@@ -170,10 +179,11 @@ Be specific about ROI and cash flow impact.
         
         return self._make_claude_request(system_prompt, user_prompt)
     
-    def analyze_cash_liberation(self, business_context: str, clearance_data: Dict) -> str:
+    def analyze_cash_liberation(self, business_context: str, clearance_data: Dict, language: str = "english") -> str:
         """AI analysis of cash liberation opportunities"""
         
-        system_prompt = "You are an expert at helping retailers optimize inventory and free up working capital."
+        language_instruction = self._get_language_instruction(language)
+        system_prompt = f"You are an expert at helping retailers optimize inventory and free up working capital. {language_instruction}"
         
         user_prompt = f"""
 Analyze this clearance opportunity:
@@ -197,10 +207,11 @@ Focus on practical execution and cash flow timing.
         
         return self._make_claude_request(system_prompt, user_prompt)
     
-    def analyze_sales_impact(self, business_context: str, sales_drop_percent: float = 10) -> str:
+    def analyze_sales_impact(self, business_context: str, sales_drop_percent: float = 10, language: str = "english") -> str:
         """AI analysis of sales drop impact on runway"""
         
-        system_prompt = "You are an expert financial advisor specializing in retail cash flow management and crisis planning."
+        language_instruction = self._get_language_instruction(language)
+        system_prompt = f"You are an expert financial advisor specializing in retail cash flow management and crisis planning. {language_instruction}"
         
         user_prompt = f"""
 Analyze the impact of a sales decline:

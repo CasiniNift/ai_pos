@@ -41,7 +41,7 @@ def _apply_uploaded_data_to_runtime(dfs: dict):
     importlib.reload(analysis)
     return "✅ Data applied. Analysis reloaded."
 
-def run_action_with_ai(action, budget, pos_api_key):
+def run_action_with_ai(action, budget, pos_api_key, language):
     # Use Claude API key instead of OpenAI
     from config import get_claude_key, validate_claude_key
     
@@ -57,7 +57,7 @@ def run_action_with_ai(action, budget, pos_api_key):
 
     if action == "What's eating my cash flow?":
         try:
-            snap, ce, low, ai_analysis = cash_eaters_with_ai()
+            snap, ce, low, ai_analysis = cash_eaters_with_ai(language)
             html = snap
             html += _df_html(ce, "💸 Cash Eaters (Discounts / Refunds / Fees)")
             html += _df_html(low, "📉 Lowest-Margin SKUs")
@@ -74,7 +74,7 @@ def run_action_with_ai(action, budget, pos_api_key):
 
     if action == "What should I reorder with budget?":
         try:
-            snap, msg, plan, ai_analysis = reorder_plan_with_ai(float(budget or 0))
+            snap, msg, plan, ai_analysis = reorder_plan_with_ai(float(budget or 0), language)
             html = snap + f"<p><b>{msg}</b></p>"
             html += _df_html(plan, "🛒 Suggested Purchase Plan")
             html += _ai_response_html(ai_analysis)  # AI Analysis at the bottom
@@ -89,7 +89,7 @@ def run_action_with_ai(action, budget, pos_api_key):
 
     if action == "How much cash can I free up?":
         try:
-            snap, msg, slow, ai_analysis = free_up_cash_with_ai()
+            snap, msg, slow, ai_analysis = free_up_cash_with_ai(language)
             html = snap + f"<p><b>{msg}</b></p>"
             html += _df_html(slow, "🏷️ Slow-Mover Clearance Estimate")
             html += _ai_response_html(ai_analysis)  # AI Analysis at the bottom
@@ -104,7 +104,7 @@ def run_action_with_ai(action, budget, pos_api_key):
 
     if action == "If sales drop 10% next month, impact on runway?":
         try:
-            snap, ai_analysis = sales_impact_analysis_with_ai(10)
+            snap, ai_analysis = sales_impact_analysis_with_ai(10, language)
             html = snap
             html += _ai_response_html(ai_analysis)  # AI Analysis at the bottom (only content here)
             return html
@@ -255,6 +255,18 @@ product_id,product_name,category,cogs
         with gr.Column(scale=2):
             with gr.Group():
                 gr.Markdown("### Ask the Assistant")
+                
+                # Add language selector
+                language = gr.Dropdown(
+                    label="Language / Lingua",
+                    choices=[
+                        ("English", "english"),
+                        ("Italiano", "italian"),
+                        ("Español", "spanish")
+                    ],
+                    value="english"
+                )
+                
                 action = gr.Dropdown(
                     label="Question",
                     choices=[
@@ -279,10 +291,10 @@ product_id,product_name,category,cogs
         return _apply_uploaded_data_to_runtime(dfs)
     apply_btn.click(_apply, inputs=[api_key, tx_u, rf_u, po_u, pm_u], outputs=[apply_msg])
 
-    run_btn.click(run_action_with_ai, inputs=[action, budget, api_key], outputs=[result_html])
+    run_btn.click(run_action_with_ai, inputs=[action, budget, api_key, language], outputs=[result_html])
 
     def load_initial():
-        return run_action_with_ai("What's eating my cash flow?", 500, "")
+        return run_action_with_ai("What's eating my cash flow?", 500, "", "english")
     app.load(load_initial, outputs=[result_html])
 
 if __name__ == "__main__":

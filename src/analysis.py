@@ -44,7 +44,7 @@ def executive_snapshot():
     """
     return html
 
-def cash_eaters_with_ai():
+def cash_eaters_with_ai(language="english"):
     """Show where cash is leaking + AI analysis"""
     ce = pd.DataFrame([
         {"category": "Discounts", "amount": float(tx["discount"].sum())},
@@ -67,11 +67,11 @@ def cash_eaters_with_ai():
     }
     
     # Get AI analysis
-    ai_analysis = ai_assistant.analyze_cash_eaters(business_context, cash_eaters_data)
+    ai_analysis = ai_assistant.analyze_cash_eaters(business_context, cash_eaters_data, language)
 
     return executive_snapshot(), ce, low, ai_analysis
 
-def reorder_plan_with_ai(budget=500.0):
+def reorder_plan_with_ai(budget=500.0, language="english"):
     """Suggest what to reorder with AI analysis"""
     days = (tx["day"].max() - tx["day"].min()).days + 1
     sku_daily = tx.groupby(["product_id", "product_name", "cogs"], as_index=False).agg(
@@ -115,11 +115,11 @@ def reorder_plan_with_ai(budget=500.0):
     }
     
     # Get AI analysis
-    ai_analysis = ai_assistant.analyze_reorder_plan(business_context, reorder_data, budget)
+    ai_analysis = ai_assistant.analyze_reorder_plan(business_context, reorder_data, budget, language)
     
     return executive_snapshot(), msg, plan_df, ai_analysis
 
-def free_up_cash_with_ai():
+def free_up_cash_with_ai(language="english"):
     """Estimate extra cash with AI analysis"""
     days = (tx["day"].max() - tx["day"].min()).days + 1
     sku_daily = tx.groupby(["product_id", "product_name"], as_index=False).agg(qty=("quantity", "sum"))
@@ -145,14 +145,14 @@ def free_up_cash_with_ai():
     }
     
     # Get AI analysis
-    ai_analysis = ai_assistant.analyze_cash_liberation(business_context, clearance_data)
+    ai_analysis = ai_assistant.analyze_cash_liberation(business_context, clearance_data, language) 
     
     return executive_snapshot(), msg, slow, ai_analysis
 
-def sales_impact_analysis_with_ai(sales_drop_percent=10):
+def sales_impact_analysis_with_ai(sales_drop_percent=10, language="english"):
     """Analyze impact of sales drop with AI"""
     business_context = ai_assistant._prepare_business_context(tx, refunds, payouts, products)
-    ai_analysis = ai_assistant.analyze_sales_impact(business_context, sales_drop_percent)
+    ai_analysis = ai_assistant.analyze_sales_impact(business_context, sales_drop_percent, language)
     
     return executive_snapshot(), ai_analysis
 
