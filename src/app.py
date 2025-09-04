@@ -130,7 +130,16 @@ with gr.Blocks(title="AI POS – Cash Flow Assistant (POC)") as app:
                     type="password",
                     placeholder="Paste your POS API key (not used in this POC)."
                 )
-                gr.Markdown("**OR upload CSV files:**")
+                
+                # Updated CSV section with popup trigger
+                csv_header = gr.HTML("""
+                    <p><strong>OR upload CSV files:</strong> 
+                    <a href="#" onclick="document.getElementById('csv-guide-modal').style.display='block'" 
+                       style="color: #2563eb; text-decoration: underline; cursor: pointer;">
+                       (click here to see template guide)
+                    </a></p>
+                """)
+                
                 tx_u = gr.File(
                     label="Transactions CSV - All transaction line items (sales). One row per line item.",
                     file_types=[".csv"],
@@ -153,6 +162,69 @@ with gr.Blocks(title="AI POS – Cash Flow Assistant (POC)") as app:
                 )
                 apply_btn = gr.Button("Apply Data")
             apply_msg = gr.Markdown()
+
+            # CSV Guide Modal (initially hidden)
+            csv_guide_modal = gr.HTML("""
+                <div id="csv-guide-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">
+                    <div style="background-color: #fefefe; margin: 5% auto; padding: 20px; border-radius: 8px; width: 80%; max-width: 600px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="margin: 0; color: #1f2937;">CSV Format Guide</h3>
+                            <span onclick="document.getElementById('csv-guide-modal').style.display='none'" 
+                                  style="color: #6b7280; font-size: 28px; font-weight: bold; cursor: pointer; line-height: 1;">&times;</span>
+                        </div>
+                        
+                        <div style="max-height: 60vh; overflow-y: auto; line-height: 1.6;">
+                            <h4 style="color: #374151; margin-top: 0;">Required Columns by File:</h4>
+                            
+                            <div style="margin-bottom: 20px;">
+                                <strong style="color: #059669;">Transactions CSV:</strong><br>
+                                <code style="background-color: #f3f4f6; padding: 2px 4px; border-radius: 3px; font-size: 12px;">
+                                date, transaction_id, product_id, product_name, category, quantity, unit_price, gross_sales, discount, net_sales, tax, line_total, payment_type, tip_amount
+                                </code>
+                            </div>
+                            
+                            <div style="margin-bottom: 20px;">
+                                <strong style="color: #dc2626;">Refunds CSV:</strong><br>
+                                <code style="background-color: #f3f4f6; padding: 2px 4px; border-radius: 3px; font-size: 12px;">
+                                original_transaction_id, refund_date, refund_amount
+                                </code>
+                            </div>
+                            
+                            <div style="margin-bottom: 20px;">
+                                <strong style="color: #7c3aed;">Payouts CSV:</strong><br>
+                                <code style="background-color: #f3f4f6; padding: 2px 4px; border-radius: 3px; font-size: 12px;">
+                                covering_sales_date, gross_card_volume, processor_fees, net_payout_amount, payout_date
+                                </code>
+                            </div>
+                            
+                            <div style="margin-bottom: 20px;">
+                                <strong style="color: #ea580c;">Product Master CSV:</strong><br>
+                                <code style="background-color: #f3f4f6; padding: 2px 4px; border-radius: 3px; font-size: 12px;">
+                                product_id, product_name, category, cogs
+                                </code>
+                            </div>
+                            
+                            <div style="background-color: #eff6ff; padding: 15px; border-radius: 6px; border-left: 4px solid #3b82f6;">
+                                <h4 style="color: #1e40af; margin-top: 0;">💡 Important Notes:</h4>
+                                <ul style="margin: 0; color: #1e3a8a;">
+                                    <li><strong>Transactions</strong> should be <strong>line-item level</strong> (one row per product sold, not per receipt)</li>
+                                    <li><strong>Refunds</strong> link back via <code>original_transaction_id</code></li>
+                                    <li><strong>Payouts</strong> represent processor settlements (typically daily for card payments)</li>
+                                    <li><strong>Product Master</strong> provides cost of goods sold (COGS) for margin calculations</li>
+                                    <li><strong>Sample data is included</strong> - try the app without uploads first!</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div style="text-align: center; margin-top: 20px;">
+                            <button onclick="document.getElementById('csv-guide-modal').style.display='none'" 
+                                    style="background-color: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                                Got it, thanks!
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            """, visible=True)
 
             with gr.Accordion("CSV format guide (click to expand)", open=False):
                 gr.Markdown("""
