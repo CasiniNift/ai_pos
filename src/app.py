@@ -1,127 +1,160 @@
+# src/app.py - Clean English UI with AI translation option
+
 import gradio as gr
 import pandas as pd
-from analysis import (
-    cash_eaters_with_ai, reorder_plan_with_ai, free_up_cash_with_ai, 
-    sales_impact_analysis_with_ai, executive_snapshot
-)
+from analysis import cash_eaters, reorder_plan, free_up_cash, executive_snapshot, set_data, reset_to_defaults
 from utils import (
     load_csv_from_uploads, persist_uploads_to_data_dir,
     validate_schema_or_raise, DEFAULT_SCHEMAS
 )
-from config import get_claude_key, validate_claude_key
-import os
+
+# Global variable to track AI language preference
+ai_language = "English"
+
+def translate_ai_content(content, target_lang):
+    """Simple translation for AI analysis content"""
+    if target_lang == "English" or "🤖 AI Analysis" not in content:
+        return content
+    
+    # Simple keyword-based translation for key business terms
+    translations = {
+        "Italiano": {
+            "AI Analysis": "Analisi IA",
+            "Here's my analysis of the cash flow challenges:": "Ecco la mia analisi delle sfide del flusso di cassa:",
+            "Assessment of the cash flow situation:": "Valutazione della situazione del flusso di cassa:",
+            "Primary cash flow concerns:": "Principali preoccupazioni del flusso di cassa:",
+            "Actionable recommendations:": "Raccomandazioni attuabili:",
+            "The data indicates you have": "I dati indicano che hai",
+            "in total cash outflows": "in deflussi di cassa totali",
+            "This represents approximately": "Questo rappresenta circa",
+            "of your gross sales": "delle tue vendite lorde",
+            "Your biggest cash drain appears to be": "Il tuo più grande drenaggio di cassa sembra essere",
+            "followed by": "seguito da",
+            "processor fees": "commissioni processore",
+            "discounts": "sconti",
+            "Consider implementing": "Considera l'implementazione di",
+            "stricter discount policies": "politiche di sconto più rigorose",
+            "negotiate better processing rates": "negoziare tariffe di elaborazione migliori"
+        },
+        "Español": {
+            "AI Analysis": "Análisis IA",
+            "Here's my analysis of the cash flow challenges:": "Aquí está mi análisis de los desafíos del flujo de efectivo:",
+            "Assessment of the cash flow situation:": "Evaluación de la situación del flujo de efectivo:",
+            "Primary cash flow concerns:": "Principales preocupaciones del flujo de efectivo:",
+            "Actionable recommendations:": "Recomendaciones accionables:",
+            "The data indicates you have": "Los datos indican que tienes",
+            "in total cash outflows": "en salidas totales de efectivo",
+            "This represents approximately": "Esto representa aproximadamente",
+            "of your gross sales": "de tus ventas brutas",
+            "Your biggest cash drain appears to be": "Tu mayor drenaje de efectivo parece ser",
+            "followed by": "seguido de",
+            "processor fees": "comisiones procesamiento",
+            "discounts": "descuentos",
+            "Consider implementing": "Considera implementar",
+            "stricter discount policies": "políticas de descuento más estrictas",
+            "negotiate better processing rates": "negociar mejores tarifas de procesamiento"
+        }
+    }
+    
+    if target_lang in translations:
+        for english, translation in translations[target_lang].items():
+            content = content.replace(english, translation)
+    
+    return content
+
+# ---------- Helpers ----------
 
 def _df_html(df, title=None):
+    """Render a DataFrame as HTML (or return empty string if None/empty)."""
     if df is None or getattr(df, "empty", True):
         return ""
     heading = f"<h4>{title}</h4>" if title else ""
     return heading + df.to_html(index=False, border=0, classes="table", justify="left")
 
-def _ai_response_html(ai_response):
-    if not ai_response or ai_response.startswith("AI Analysis Error"):
-        return f'<div style="background-color: #ffebee; padding: 10px; border-radius: 5px; color: #c62828;"><strong>⚠️ {ai_response}</strong></div>'
-    
-    return f'''
-    <div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #4caf50;">
-        <h4 style="color: #2e7d32; margin-top: 0;">🤖 AI Analysis</h4>
-        <div style="color: #1b5e20; line-height: 1.6;">{ai_response.replace(chr(10), "<br>")}</div>
-    </div>
-    '''
-
 def _reload_data_from_uploads(tx_u, rf_u, po_u, pm_u):
+    """Load DataFrames from uploaded files or return empty dict if none provided."""
     return load_csv_from_uploads(tx_u, rf_u, po_u, pm_u)
 
 def _apply_uploaded_data_to_runtime(dfs: dict):
+    """Apply uploaded data to analysis functions or reset to defaults."""
     if not dfs:
-        return "No files uploaded. Using existing /data files."
-    for key, df in dfs.items():
-        validate_schema_or_raise(key, df, DEFAULT_SCHEMAS[key])
-    persist_uploads_to_data_dir(dfs)
-    import importlib, analysis
-    importlib.reload(analysis)
-    return "✅ Data applied. Analysis reloaded."
-
-def run_action_with_ai(action, budget, pos_api_key, language):
-    # Use Claude API key instead of OpenAI
-    from config import get_claude_key, validate_claude_key
+        reset_to_defaults()
+        return "🔄 Using default data from /data directory."
     
-    claude_key = get_claude_key()
-    
-    if claude_key and validate_claude_key(claude_key):
-        os.environ["ANTHROPIC_API_KEY"] = claude_key
-        try:
-            from analysis import ai_assistant
-            ai_assistant.set_api_key(claude_key)
-        except:
-            pass
+    try:
+        for key, df in dfs.items():
+            validate_schema_or_raise(key, df, DEFAULT_SCHEMAS[key])
+        
+        persist_uploads_to_data_dir(dfs)
+        
+        set_data(
+            transactions=dfs.get("tx"),
+            refunds=dfs.get("rf"), 
+            payouts=dfs.get("po"),
+            products=dfs.get("pm")
+        )
+        
+        return "✅ Uploaded data applied successfully!"
+        
+    except Exception as e:
+        reset_to_defaults()
+        return f"❌ Error applying data: {str(e)}. Reset to defaults."
 
+def run_action_html(action, budget, ai_lang):
+    """Route selected question → formatted HTML output with AI translation."""
+    global ai_language
+    ai_language = ai_lang
+    
     if action == "What's eating my cash flow?":
-        try:
-            snap, ce, low, ai_analysis = cash_eaters_with_ai(language)
-            html = snap
-            html += _df_html(ce, "💸 Cash Eaters (Discounts / Refunds / Fees)")
-            html += _df_html(low, "📉 Lowest-Margin SKUs")
-            html += _ai_response_html(ai_analysis)  # AI Analysis at the bottom
-            return html
-        except Exception as e:
-            from analysis import cash_eaters
-            snap, ce, low = cash_eaters()
-            html = snap
-            html += _df_html(ce, "💸 Cash Eaters (Discounts / Refunds / Fees)")
-            html += _df_html(low, "📉 Lowest-Margin SKUs")
-            html += f'<div style="background-color: #fff3cd; padding: 10px; border-radius: 5px;"><strong>ℹ️ AI analysis unavailable: {str(e)}</strong></div>'
-            return html
+        snap, ce, low, ai_insights = cash_eaters()
+        html = snap
+        html += _df_html(ce, "Cash Eaters (Discounts / Refunds / Fees)")
+        html += _df_html(low, "Lowest-Margin SKUs")
+        # Translate only the AI insights
+        translated_insights = translate_ai_content(ai_insights, ai_lang)
+        html += translated_insights
+        return html
 
     if action == "What should I reorder with budget?":
-        try:
-            snap, msg, plan, ai_analysis = reorder_plan_with_ai(float(budget or 0), language)
-            html = snap + f"<p><b>{msg}</b></p>"
-            html += _df_html(plan, "🛒 Suggested Purchase Plan")
-            html += _ai_response_html(ai_analysis)  # AI Analysis at the bottom
-            return html
-        except Exception as e:
-            from analysis import reorder_plan
-            snap, msg, plan = reorder_plan(float(budget or 0))
-            html = snap + f"<p><b>{msg}</b></p>"
-            html += _df_html(plan, "🛒 Suggested Purchase Plan")
-            html += f'<div style="background-color: #fff3cd; padding: 10px; border-radius: 5px;"><strong>ℹ️ AI unavailable: {str(e)}</strong></div>'
-            return html
+        snap, msg, plan, ai_insights = reorder_plan(float(budget or 0))
+        html = snap + f"<p><b>{msg}</b></p>"
+        html += _df_html(plan, "Suggested Purchase Plan")
+        # Translate only the AI insights
+        translated_insights = translate_ai_content(ai_insights, ai_lang)
+        html += translated_insights
+        return html
 
     if action == "How much cash can I free up?":
-        try:
-            snap, msg, slow, ai_analysis = free_up_cash_with_ai(language)
-            html = snap + f"<p><b>{msg}</b></p>"
-            html += _df_html(slow, "🏷️ Slow-Mover Clearance Estimate")
-            html += _ai_response_html(ai_analysis)  # AI Analysis at the bottom
-            return html
-        except Exception as e:
-            from analysis import free_up_cash
-            snap, msg, slow = free_up_cash()
-            html = snap + f"<p><b>{msg}</b></p>"
-            html += _df_html(slow, "🏷️ Slow-Mover Clearance Estimate")
-            html += f'<div style="background-color: #fff3cd; padding: 10px; border-radius: 5px;"><strong>ℹ️ AI unavailable: {str(e)}</strong></div>'
-            return html
+        snap, msg, slow, ai_insights = free_up_cash()
+        html = snap + f"<p><b>{msg}</b></p>"
+        html += _df_html(slow, "Slow-Mover Clearance Estimate")
+        # Translate only the AI insights
+        translated_insights = translate_ai_content(ai_insights, ai_lang)
+        html += translated_insights
+        return html
 
     if action == "If sales drop 10% next month, impact on runway?":
-        try:
-            snap, ai_analysis = sales_impact_analysis_with_ai(10, language)
-            html = snap
-            html += _ai_response_html(ai_analysis)  # AI Analysis at the bottom (only content here)
-            return html
-        except Exception as e:
-            snap = executive_snapshot()
-            html = snap
-            html += f'<div style="background-color: #fff3cd; padding: 10px; border-radius: 5px;"><strong>ℹ️ AI unavailable: {str(e)}</strong></div>'
-            html += "<p><i>📊 Forecast model placeholder: would run a 4–12 week cash model with -10% sales.</i></p>"
-            return html
+        snap = executive_snapshot()
+        ai_insights = f"""
+        <div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; margin: 10px 0;">
+        <h4>🤖 AI Analysis</h4>
+        <p><i>Advanced forecasting model would analyze the impact of a 10% sales decline on your cash runway, providing scenario planning for the next 4-12 weeks.</i></p>
+        </div>
+        """
+        translated_insights = translate_ai_content(ai_insights, ai_lang)
+        html = snap + translated_insights
+        return html
 
     return executive_snapshot()
 
+# ---------- UI Layout ----------
+
 with gr.Blocks(title="AI POS – Cash Flow Assistant (POC)") as app:
     gr.Markdown("# AI POS – Cash Flow Assistant (POC)")
-    gr.Markdown("Upload your POS data **or** paste an API key, choose a question, and get actionable insights.")
+    gr.Markdown("Upload your POS data or paste an API key, choose a question, and get actionable insights.")
 
     with gr.Row():
+        # LEFT: Data inputs
         with gr.Column(scale=1):
             with gr.Group():
                 gr.Markdown("### Data Input")
@@ -130,15 +163,11 @@ with gr.Blocks(title="AI POS – Cash Flow Assistant (POC)") as app:
                     type="password",
                     placeholder="Paste your POS API key (not used in this POC)."
                 )
+                gr.Markdown("**OR upload CSV files:**")
+                gr.Markdown("*Leave files empty to use default sample data*")
                 
-                # Updated CSV section with popup trigger
-                csv_header = gr.HTML("""
-                    <p><strong>OR upload CSV files:</strong> 
-                    <a href="#" onclick="document.getElementById('csv-guide-modal').style.display='block'" 
-                       style="color: #2563eb; text-decoration: underline; cursor: pointer;">
-                       (click here to see template guide)
-                    </a></p>
-                """)
+                # Add sample format button
+                sample_btn = gr.Button("📋 Sample CSV Format( Scroll Down to the Bottom of the Page )", size="sm")
                 
                 tx_u = gr.File(
                     label="Transactions CSV - All transaction line items (sales). One row per line item.",
@@ -161,150 +190,107 @@ with gr.Blocks(title="AI POS – Cash Flow Assistant (POC)") as app:
                     type="filepath"
                 )
                 apply_btn = gr.Button("Apply Data")
+                reset_btn = gr.Button("Reset to Sample Data", variant="secondary")
             apply_msg = gr.Markdown()
 
-            # CSV Guide Modal (initially hidden)
-            csv_guide_modal = gr.HTML("""
-                <div id="csv-guide-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">
-                    <div style="background-color: #fefefe; margin: 5% auto; padding: 20px; border-radius: 8px; width: 80%; max-width: 600px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                            <h3 style="margin: 0; color: #1f2937;">CSV Format Guide</h3>
-                            <span onclick="document.getElementById('csv-guide-modal').style.display='none'" 
-                                  style="color: #6b7280; font-size: 28px; font-weight: bold; cursor: pointer; line-height: 1;">&times;</span>
-                        </div>
-                        
-                        <div style="max-height: 60vh; overflow-y: auto; line-height: 1.6;">
-                            <h4 style="color: #374151; margin-top: 0;">Required Columns by File:</h4>
-                            
-                            <div style="margin-bottom: 20px;">
-                                <strong style="color: #059669;">Transactions CSV:</strong><br>
-                                <code style="background-color: #f3f4f6; padding: 2px 4px; border-radius: 3px; font-size: 12px;">
-                                date, transaction_id, product_id, product_name, category, quantity, unit_price, gross_sales, discount, net_sales, tax, line_total, payment_type, tip_amount
-                                </code>
-                            </div>
-                            
-                            <div style="margin-bottom: 20px;">
-                                <strong style="color: #dc2626;">Refunds CSV:</strong><br>
-                                <code style="background-color: #f3f4f6; padding: 2px 4px; border-radius: 3px; font-size: 12px;">
-                                original_transaction_id, refund_date, refund_amount
-                                </code>
-                            </div>
-                            
-                            <div style="margin-bottom: 20px;">
-                                <strong style="color: #7c3aed;">Payouts CSV:</strong><br>
-                                <code style="background-color: #f3f4f6; padding: 2px 4px; border-radius: 3px; font-size: 12px;">
-                                covering_sales_date, gross_card_volume, processor_fees, net_payout_amount, payout_date
-                                </code>
-                            </div>
-                            
-                            <div style="margin-bottom: 20px;">
-                                <strong style="color: #ea580c;">Product Master CSV:</strong><br>
-                                <code style="background-color: #f3f4f6; padding: 2px 4px; border-radius: 3px; font-size: 12px;">
-                                product_id, product_name, category, cogs
-                                </code>
-                            </div>
-                            
-                            <div style="background-color: #eff6ff; padding: 15px; border-radius: 6px; border-left: 4px solid #3b82f6;">
-                                <h4 style="color: #1e40af; margin-top: 0;">💡 Important Notes:</h4>
-                                <ul style="margin: 0; color: #1e3a8a;">
-                                    <li><strong>Transactions</strong> should be <strong>line-item level</strong> (one row per product sold, not per receipt)</li>
-                                    <li><strong>Refunds</strong> link back via <code>original_transaction_id</code></li>
-                                    <li><strong>Payouts</strong> represent processor settlements (typically daily for card payments)</li>
-                                    <li><strong>Product Master</strong> provides cost of goods sold (COGS) for margin calculations</li>
-                                    <li><strong>Sample data is included</strong> - try the app without uploads first!</li>
-                                </ul>
-                            </div>
-                        </div>
-                        
-                        <div style="text-align: center; margin-top: 20px;">
-                            <button onclick="document.getElementById('csv-guide-modal').style.display='none'" 
-                                    style="background-color: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
-                                Got it, thanks!
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            """, visible=True)
-
-            with gr.Accordion("CSV format guide (click to expand)", open=False):
-                gr.Markdown("""
-**Transactions CSV — required columns**
-
-date,transaction_id,product_id,product_name,category,quantity,unit_price,
-gross_sales,discount,net_sales,tax,line_total,payment_type,tip_amount
-
-**Refunds CSV — required columns**
-
-original_transaction_id,refund_date,refund_amount
-
-**Payouts CSV — required columns**
-
-covering_sales_date,gross_card_volume,processor_fees,net_payout_amount,payout_date
-
-**Product Master CSV — required columns**
-
-product_id,product_name,category,cogs
-
-**Notes**
-- *Transactions* should be **line-item** level (not one row per receipt).
-- *Refunds* link back via `original_transaction_id`; `refund_date` is when cash leaves.
-- *Payouts* represent processor settlements (e.g., D+1) for **card** volume.
-- *Product Master* provides `cogs` to compute margins.
-""")
-
+        # RIGHT: Questions + Results
         with gr.Column(scale=2):
             with gr.Group():
                 gr.Markdown("### Ask the Assistant")
                 
-                # Add language selector
-                language = gr.Dropdown(
-                    label="Language / Lingua",
-                    choices=[
-                        ("English", "english"),
-                        ("Italiano", "italian"),
-                        ("Español", "spanish")
-                    ],
-                    value="english"
-                )
+                with gr.Row():
+                    action = gr.Dropdown(
+                        label="Question",
+                        choices=[
+                            "What's eating my cash flow?",
+                            "What should I reorder with budget?",
+                            "How much cash can I free up?",
+                            "If sales drop 10% next month, impact on runway?",
+                        ],
+                        value="What's eating my cash flow?",
+                        scale=2
+                    )
+                    ai_lang_selector = gr.Dropdown(
+                        label="AI Language",
+                        choices=["English", "Italiano", "Español"],
+                        value="English",
+                        scale=1
+                    )
                 
-                action = gr.Dropdown(
-                    label="Question",
-                    choices=[
-                        "What's eating my cash flow?",
-                        "What should I reorder with budget?",
-                        "How much cash can I free up?",
-                        "If sales drop 10% next month, impact on runway?",
-                    ],
-                    value="What's eating my cash flow?"
-                )
                 budget = gr.Number(label="Budget (€)", value=500, visible=False)
                 run_btn = gr.Button("Run")
 
             result_html = gr.HTML(label="Results")
 
+    # Sample format modal - positioned after main layout for overlay effect
+    with gr.Row(visible=False) as sample_modal:
+        with gr.Column():
+            with gr.Group():
+                gr.Markdown("### 📋 CSV Format Examples")
+                
+                with gr.Accordion("Transactions CSV Example", open=True):
+                    gr.Code("""date,transaction_id,product_id,product_name,category,quantity,unit_price,gross_sales,discount,net_sales,tax,line_total,payment_type,tip_amount
+2025-01-08,2001,ESP,Espresso,Beverage,1,2.0,2.0,0.0,2.0,0.2,2.2,CARD,0.5
+2025-01-08,2001,CRS,Croissant,Food,1,2.8,2.8,0.0,2.8,0.28,3.08,CARD,0.0
+2025-01-08,2002,LAT,Latte,Beverage,1,3.5,3.5,0.0,3.5,0.35,3.85,CASH,0.0""")
+                
+                with gr.Accordion("Refunds CSV Example"):
+                    gr.Code("""original_transaction_id,refund_date,refund_amount,refund_id,reason
+2003,2025-01-08,6.93,RFD001,Customer complaint
+2012,2025-01-08,6.43,RFD002,Wrong item
+2018,2025-01-08,7.15,RFD003,Duplicate charge""")
+                
+                with gr.Accordion("Payouts CSV Example"):
+                    gr.Code("""covering_sales_date,gross_card_volume,processor_fees,net_payout_amount,payout_date
+2025-01-08,124.75,4.24,120.51,2025-01-09
+2025-01-09,89.32,3.12,86.20,2025-01-10""")
+                
+                with gr.Accordion("Product Master CSV Example"):
+                    gr.Code("""product_id,product_name,category,cogs,unit_price
+ESP,Espresso,Beverage,0.40,2.00
+LAT,Latte,Beverage,0.90,3.50
+CAP,Cappuccino,Beverage,0.85,3.20
+SNW,Sandwich,Food,2.00,6.50""")
+                
+                gr.Markdown("""
+**Key Requirements:**
+- **Transactions**: One row per line item (not per receipt)
+- **Refunds**: Link back via `original_transaction_id`
+- **Payouts**: Daily card settlement data
+- **Product Master**: Include COGS for margin calculations
+                
+💡 **Tip**: Download these examples as templates for your own data formatting.
+                """)
+                
+                with gr.Row():
+                    close_btn = gr.Button("Close", variant="primary", scale=1)
+
+    # Sample format modal handlers
+    def _show_sample():
+        return gr.update(visible=True)
+    def _hide_sample():
+        return gr.update(visible=False)
+    sample_btn.click(_show_sample, outputs=[sample_modal])
+    close_btn.click(_hide_sample, outputs=[sample_modal])
+
+    # Event handlers
     def _toggle_budget(q):
         return gr.update(visible=(q == "What should I reorder with budget?"))
     action.change(_toggle_budget, inputs=action, outputs=budget)
 
-    def _apply(pos_api_key_val, txf, rff, pof, pmf):
+    def _apply(api_key_val, txf, rff, pof, pmf):
         dfs = _reload_data_from_uploads(txf, rff, pof, pmf)
         return _apply_uploaded_data_to_runtime(dfs)
     apply_btn.click(_apply, inputs=[api_key, tx_u, rf_u, po_u, pm_u], outputs=[apply_msg])
 
-    run_btn.click(run_action_with_ai, inputs=[action, budget, api_key, language], outputs=[result_html])
+    def _reset():
+        reset_to_defaults()
+        return "🔄 Reset to default sample data."
+    reset_btn.click(_reset, outputs=[apply_msg])
 
-    def load_initial():
-        return run_action_with_ai("What's eating my cash flow?", 500, "", "english")
-    app.load(load_initial, outputs=[result_html])
+    def _route(q, b, ai_lang):
+        return run_action_html(q, b, ai_lang)
+    run_btn.click(_route, inputs=[action, budget, ai_lang_selector], outputs=[result_html])
 
 if __name__ == "__main__":
-    print("🚀 Starting AI POS Cash Flow Assistant...")
-    
-    env_key = get_claude_key()
-    if env_key and validate_claude_key(env_key):
-        print("✅ AI analysis ready (Claude configured)")
-    else:
-        print("⚠️  AI analysis limited (Claude not configured)")
-        print("💡 Basic analytics still available")
-    
     app.launch(share=False, inbrowser=True)

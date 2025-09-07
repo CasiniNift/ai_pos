@@ -35,7 +35,7 @@ def load_csv_from_uploads(tx_u, rf_u, po_u, pm_u) -> Dict[str, pd.DataFrame]:
     if tx_u: dfs["tx"] = _read_csv(tx_u.name if hasattr(tx_u, "name") else tx_u)
     if rf_u: dfs["rf"] = _read_csv(rf_u.name if hasattr(rf_u, "name") else rf_u)
     if po_u: dfs["po"] = _read_csv(po_u.name if hasattr(po_u, "name") else po_u)
-    if pm_u: dfs["pm"] = _read_csv(pmu.name if hasattr(pm_u, "name") else pm_u)
+    if pm_u: dfs["pm"] = _read_csv(pm_u.name if hasattr(pm_u, "name") else pm_u)  # Fixed typo: was 'pmu'
     return dfs
 
 def validate_schema_or_raise(kind: str, df: pd.DataFrame, required_columns):

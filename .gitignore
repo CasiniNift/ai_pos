@@ -1,3 +1,20 @@
+# Data outputs (keep sample input CSVs in /data/, ignore generated outputs)
+data/*.tmp
+data/*.bak
+data/*.out
+*.csv~
+*.xlsx~
+
+# Test files - ignore any sample/test CSV files
+sample_*.csv
+test_*.csv
+*_test.csv
+*_sample.csv
+
+# Uploaded files (if you create an uploads directory)
+uploads/
+temp_uploads/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
