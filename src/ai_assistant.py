@@ -1,4 +1,4 @@
-# src/ai_assistant.py - Claude Integration Layer
+# src/ai_assistant.py - Claude Integration Layer with improved formatting
 
 import os
 import anthropic
@@ -117,9 +117,14 @@ PRODUCT CATALOG:
     def _get_language_instruction(self, language: str) -> str:
         """Get language-specific instruction for AI responses"""
         instructions = {
-            "italian": "Rispondi SEMPRE in italiano. Usa un tono professionale ma colloquiale, come se stessi consigliando direttamente un imprenditore italiano. Usa terminologia finanziaria appropriata in italiano.",
-            "spanish": "Responde SIEMPRE en español. Usa un tono profesional pero conversacional, como si estuvieras aconsejando directamente a un empresario español. Usa terminología financiera apropiada en español.",
-            "english": "Respond in English with a professional but conversational tone, like you're advising a business owner directly."
+            "italian": """Rispondi SEMPRE in italiano. Usa un tono professionale ma colloquiale, come se stessi consigliando direttamente un imprenditore italiano. 
+            Struttura la tua risposta con paragrafi chiari e numerati quando appropriato. Usa terminologia finanziaria appropriata in italiano.
+            Formatta la risposta con interruzioni di paragrafo chiare per migliorare la leggibilità.""",
+            "spanish": """Responde SIEMPRE en español. Usa un tono profesional pero conversacional, como si estuvieras aconsejando directamente a un empresario español. 
+            Estructura tu respuesta con párrafos claros y numerados cuando sea apropiado. Usa terminología financiera apropiada en español.
+            Formatea la respuesta con saltos de párrafo claros para mejorar la legibilidad.""",
+            "english": """Respond in English with a professional but conversational tone, like you're advising a business owner directly.
+            Structure your response with clear, numbered paragraphs when appropriate. Format the response with clear paragraph breaks for readability."""
         }
         return instructions.get(language, instructions["english"])
     
@@ -142,13 +147,18 @@ Processor Fees: €{cash_eaters_data.get('processor_fees', 0):,.2f}
 LOWEST MARGIN PRODUCTS:
 {cash_eaters_data.get('low_margin_products', 'No data available')}
 
-Provide a concise analysis answering "What's eating my cash flow?" Include:
-1. The biggest cash drain (2-3 sentences)
-2. Specific actionable recommendations (3-4 bullet points)
-3. Quick wins to improve cash flow this week
+Provide a structured analysis answering "What's eating my cash flow?" Format your response with:
+
+1. **Biggest cash drain assessment** (2-3 sentences)
+
+2. **Specific actionable recommendations** (3-4 key points)
+
+3. **Quick wins for this week** (immediate actions)
+
+Use clear paragraph breaks between sections for readability.
 """
         
-        return self._make_claude_request(system_prompt, user_prompt)
+        return self._make_claude_request(system_prompt, user_prompt, max_tokens=600)
     
     def analyze_reorder_plan(self, business_context: str, reorder_data: Dict, budget: float, language: str = "english") -> str:
         """AI analysis of reorder recommendations"""
@@ -168,16 +178,20 @@ Remaining Budget: €{reorder_data.get('remaining_budget', 0):,.2f}
 RECOMMENDED PURCHASES:
 {reorder_data.get('purchase_plan', 'No recommendations available')}
 
-Provide analysis for "What should I reorder with my budget?" Include:
-1. Assessment of the purchase plan (2-3 sentences)
-2. Why these products were prioritized
-3. Expected impact on cash flow and sales
-4. Any alternative strategies to consider
+Provide structured analysis for "What should I reorder with my budget?" Format with:
 
-Be specific about ROI and cash flow impact.
+1. **Purchase plan assessment** (2-3 sentences on the overall strategy)
+
+2. **Product prioritization rationale** (why these specific items)
+
+3. **Expected ROI and cash flow impact** (quantified benefits where possible)
+
+4. **Alternative strategies** (other options to consider)
+
+Use clear paragraph breaks between sections. Be specific about financial impact.
 """
         
-        return self._make_claude_request(system_prompt, user_prompt)
+        return self._make_claude_request(system_prompt, user_prompt, max_tokens=600)
     
     def analyze_cash_liberation(self, business_context: str, clearance_data: Dict, language: str = "english") -> str:
         """AI analysis of cash liberation opportunities"""
@@ -196,16 +210,20 @@ Estimated Extra Cash from Clearance: €{clearance_data.get('total_extra_cash', 
 SLOW-MOVING INVENTORY:
 {clearance_data.get('slow_movers', 'No data available')}
 
-Provide analysis for "How much cash can I free up?" Include:
-1. Assessment of the cash liberation potential (2-3 sentences)
-2. Specific clearance strategy recommendations
-3. Timing considerations (when to start clearance)
-4. How to reinvest the freed-up cash for maximum impact
+Provide structured analysis for "How much cash can I free up?" Format with:
 
-Focus on practical execution and cash flow timing.
+1. **Cash liberation potential assessment** (evaluation of the €{clearance_data.get('total_extra_cash', 0):,.2f} opportunity)
+
+2. **Clearance strategy recommendations** (specific execution tactics)
+
+3. **Timing considerations** (when and how to implement)
+
+4. **Reinvestment strategy** (how to use the freed cash for maximum impact)
+
+Use clear paragraph breaks between sections. Focus on practical execution steps.
 """
         
-        return self._make_claude_request(system_prompt, user_prompt)
+        return self._make_claude_request(system_prompt, user_prompt, max_tokens=600)
     
     def analyze_sales_impact(self, business_context: str, sales_drop_percent: float = 10, language: str = "english") -> str:
         """AI analysis of sales drop impact on runway"""
@@ -221,19 +239,24 @@ Analyze the impact of a sales decline:
 SCENARIO ANALYSIS:
 Projected sales drop: {sales_drop_percent}%
 
-Based on the current business performance, provide analysis for "If sales drop {sales_drop_percent}% next month, what's the impact on my cash runway?"
+Provide structured analysis for "If sales drop {sales_drop_percent}% next month, what's the impact on my cash runway?"
 
-Include:
-1. Immediate cash flow impact assessment
-2. How many weeks/months of runway this affects
-3. Which expenses to cut first
-4. Strategies to mitigate the impact
-5. Early warning signs to monitor
+Format with:
 
-Be specific about cash preservation strategies and timeline.
+1. **Immediate cash flow impact** (quantified impact assessment)
+
+2. **Runway analysis** (how many weeks/months affected)
+
+3. **Priority cost reductions** (which expenses to cut first)
+
+4. **Mitigation strategies** (actions to minimize impact)
+
+5. **Monitoring plan** (early warning signs to watch)
+
+Use clear paragraph breaks between sections. Be specific about cash preservation timeline.
 """
         
-        return self._make_claude_request(system_prompt, user_prompt, max_tokens=600)
+        return self._make_claude_request(system_prompt, user_prompt, max_tokens=700)
     
     def generate_executive_insights(self, business_context: str) -> str:
         """Generate high-level executive insights"""
@@ -246,11 +269,11 @@ Provide a brief executive summary based on this business data:
 {business_context}
 
 Provide:
-1. Key business health indicators (2-3 sentences)
-2. Top 2 opportunities for improvement
-3. One critical action item for this week
+1. **Key business health indicators** (2-3 sentences)
+2. **Top 2 opportunities for improvement**
+3. **Critical action item for this week**
 
-Keep it concise and executive-focused.
+Keep it concise and executive-focused with clear paragraph breaks.
 """
         
-        return self._make_claude_request(system_prompt, user_prompt, max_tokens=300)
+        return self._make_claude_request(system_prompt, user_prompt, max_tokens=350)

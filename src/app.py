@@ -8,60 +8,6 @@ from utils import (
     validate_schema_or_raise, DEFAULT_SCHEMAS
 )
 
-# Global variable to track AI language preference
-ai_language = "English"
-
-def translate_ai_content(content, target_lang):
-    """Simple translation for AI analysis content"""
-    if target_lang == "English" or "🤖 AI Analysis" not in content:
-        return content
-    
-    # Simple keyword-based translation for key business terms
-    translations = {
-        "Italiano": {
-            "AI Analysis": "Analisi IA",
-            "Here's my analysis of the cash flow challenges:": "Ecco la mia analisi delle sfide del flusso di cassa:",
-            "Assessment of the cash flow situation:": "Valutazione della situazione del flusso di cassa:",
-            "Primary cash flow concerns:": "Principali preoccupazioni del flusso di cassa:",
-            "Actionable recommendations:": "Raccomandazioni attuabili:",
-            "The data indicates you have": "I dati indicano che hai",
-            "in total cash outflows": "in deflussi di cassa totali",
-            "This represents approximately": "Questo rappresenta circa",
-            "of your gross sales": "delle tue vendite lorde",
-            "Your biggest cash drain appears to be": "Il tuo più grande drenaggio di cassa sembra essere",
-            "followed by": "seguito da",
-            "processor fees": "commissioni processore",
-            "discounts": "sconti",
-            "Consider implementing": "Considera l'implementazione di",
-            "stricter discount policies": "politiche di sconto più rigorose",
-            "negotiate better processing rates": "negoziare tariffe di elaborazione migliori"
-        },
-        "Español": {
-            "AI Analysis": "Análisis IA",
-            "Here's my analysis of the cash flow challenges:": "Aquí está mi análisis de los desafíos del flujo de efectivo:",
-            "Assessment of the cash flow situation:": "Evaluación de la situación del flujo de efectivo:",
-            "Primary cash flow concerns:": "Principales preocupaciones del flujo de efectivo:",
-            "Actionable recommendations:": "Recomendaciones accionables:",
-            "The data indicates you have": "Los datos indican que tienes",
-            "in total cash outflows": "en salidas totales de efectivo",
-            "This represents approximately": "Esto representa aproximadamente",
-            "of your gross sales": "de tus ventas brutas",
-            "Your biggest cash drain appears to be": "Tu mayor drenaje de efectivo parece ser",
-            "followed by": "seguido de",
-            "processor fees": "comisiones procesamiento",
-            "discounts": "descuentos",
-            "Consider implementing": "Considera implementar",
-            "stricter discount policies": "políticas de descuento más estrictas",
-            "negotiate better processing rates": "negociar mejores tarifas de procesamiento"
-        }
-    }
-    
-    if target_lang in translations:
-        for english, translation in translations[target_lang].items():
-            content = content.replace(english, translation)
-    
-    return content
-
 # ---------- Helpers ----------
 
 def _df_html(df, title=None):
@@ -101,55 +47,44 @@ def _apply_uploaded_data_to_runtime(dfs: dict):
         return f"❌ Error applying data: {str(e)}. Reset to defaults."
 
 def run_action_html(action, budget, ai_lang):
-    """Route selected question → formatted HTML output with AI translation."""
-    global ai_language
-    ai_language = ai_lang
+    """Route selected question → formatted HTML output with AI language support."""
     
-    if action == "What's eating my cash flow?":
-        snap, ce, low, ai_insights = cash_eaters()
-        html = snap
-        html += _df_html(ce, "Cash Eaters (Discounts / Refunds / Fees)")
-        html += _df_html(low, "Lowest-Margin SKUs")
-        # Translate only the AI insights
-        translated_insights = translate_ai_content(ai_insights, ai_lang)
-        html += translated_insights
-        return html
+    try:
+        if action == "What's eating my cash flow?":
+            snap, ce, low, ai_insights = cash_eaters(ui_language=ai_lang)
+            html = snap
+            html += _df_html(ce, "Cash Eaters (Discounts / Refunds / Fees)")
+            html += _df_html(low, "Lowest-Margin SKUs")
+            html += ai_insights
+            return html
 
-    if action == "What should I reorder with budget?":
-        snap, msg, plan, ai_insights = reorder_plan(float(budget or 0))
-        html = snap + f"<p><b>{msg}</b></p>"
-        html += _df_html(plan, "Suggested Purchase Plan")
-        # Translate only the AI insights
-        translated_insights = translate_ai_content(ai_insights, ai_lang)
-        html += translated_insights
-        return html
+        elif action == "What should I reorder with budget?":
+            snap, msg, plan, ai_insights = reorder_plan(float(budget or 500), ui_language=ai_lang)
+            html = snap + f"<p><b>{msg}</b></p>"
+            html += _df_html(plan, "Suggested Purchase Plan")
+            html += ai_insights
+            return html
 
-    if action == "How much cash can I free up?":
-        snap, msg, slow, ai_insights = free_up_cash()
-        html = snap + f"<p><b>{msg}</b></p>"
-        html += _df_html(slow, "Slow-Mover Clearance Estimate")
-        # Translate only the AI insights
-        translated_insights = translate_ai_content(ai_insights, ai_lang)
-        html += translated_insights
-        return html
+        elif action == "How much cash can I free up?":
+            snap, msg, slow, ai_insights = free_up_cash(ui_language=ai_lang)
+            html = snap + f"<p><b>{msg}</b></p>"
+            html += _df_html(slow, "Slow-Mover Clearance Estimate")
+            html += ai_insights
+            return html
 
-    if action == "If sales drop 10% next month, impact on runway?":
-        snap = executive_snapshot()
-        ai_insights = f"""
-        <div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; margin: 10px 0;">
-        <h4>🤖 AI Analysis</h4>
-        <p><i>Advanced forecasting model would analyze the impact of a 10% sales decline on your cash runway, providing scenario planning for the next 4-12 weeks.</i></p>
-        </div>
-        """
-        translated_insights = translate_ai_content(ai_insights, ai_lang)
-        html = snap + translated_insights
-        return html
+    
 
-    return executive_snapshot()
+        else:
+            return executive_snapshot()
+            
+    except Exception as e:
+        return f"<div style='color: red; padding: 15px; background-color: #f8d7da; border-radius: 5px;'>Error: {str(e)}</div>"
 
 # ---------- UI Layout ----------
 
-with gr.Blocks(title="AI POS – Cash Flow Assistant (POC)") as app:
+with gr.Blocks(title="AI POS – Cash Flow Assistant (POC)", css="""
+    .ai-toggle { background-color: #e8f5e8; padding: 10px; border-radius: 5px; }
+""") as app:
     gr.Markdown("# AI POS – Cash Flow Assistant (POC)")
     gr.Markdown("Upload your POS data or paste an API key, choose a question, and get actionable insights.")
 
@@ -205,7 +140,7 @@ with gr.Blocks(title="AI POS – Cash Flow Assistant (POC)") as app:
                             "What's eating my cash flow?",
                             "What should I reorder with budget?",
                             "How much cash can I free up?",
-                            "If sales drop 10% next month, impact on runway?",
+                          
                         ],
                         value="What's eating my cash flow?",
                         scale=2
@@ -218,7 +153,7 @@ with gr.Blocks(title="AI POS – Cash Flow Assistant (POC)") as app:
                     )
                 
                 budget = gr.Number(label="Budget (€)", value=500, visible=False)
-                run_btn = gr.Button("Run")
+                run_btn = gr.Button("Run", variant="primary")
 
             result_html = gr.HTML(label="Results")
 
