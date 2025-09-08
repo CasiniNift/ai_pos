@@ -1,8 +1,11 @@
-# src/app.py - Clean English UI with AI translation option
+# src/app.py - Upload-only mode (no default sample data)
 
 import gradio as gr
 import pandas as pd
-from analysis import cash_eaters, reorder_plan, free_up_cash, executive_snapshot, set_data, reset_to_defaults
+from analysis import (
+    cash_eaters, reorder_plan, free_up_cash, executive_snapshot, 
+    set_data, reset_to_uploads, get_data_status
+)
 from utils import (
     load_csv_from_uploads, persist_uploads_to_data_dir,
     validate_schema_or_raise, DEFAULT_SCHEMAS
@@ -22,17 +25,30 @@ def _reload_data_from_uploads(tx_u, rf_u, po_u, pm_u):
     return load_csv_from_uploads(tx_u, rf_u, po_u, pm_u)
 
 def _apply_uploaded_data_to_runtime(dfs: dict):
-    """Apply uploaded data to analysis functions or reset to defaults."""
+    """Apply uploaded data to analysis functions."""
     if not dfs:
-        reset_to_defaults()
-        return "🔄 Using default data from /data directory."
+        return "⚠️ No CSV files uploaded. Please upload all required files to continue."
+    
+    # Check if we have all required files
+    required_files = {"tx": "Transactions", "rf": "Refunds", "po": "Payouts", "pm": "Product Master"}
+    missing_files = []
+    
+    for key, description in required_files.items():
+        if key not in dfs:
+            missing_files.append(description)
+    
+    if missing_files:
+        return f"⚠️ Missing required files: {', '.join(missing_files)}. Please upload all CSV files."
     
     try:
+        # Validate all schemas first
         for key, df in dfs.items():
             validate_schema_or_raise(key, df, DEFAULT_SCHEMAS[key])
         
+        # Save to data directory
         persist_uploads_to_data_dir(dfs)
         
+        # Set the data in analysis module
         set_data(
             transactions=dfs.get("tx"),
             refunds=dfs.get("rf"), 
@@ -40,11 +56,16 @@ def _apply_uploaded_data_to_runtime(dfs: dict):
             products=dfs.get("pm")
         )
         
-        return "✅ Uploaded data applied successfully!"
+        # Show data summary
+        summary_lines = []
+        for key, df in dfs.items():
+            file_names = {"tx": "Transactions", "rf": "Refunds", "po": "Payouts", "pm": "Product Master"}
+            summary_lines.append(f"✅ {file_names[key]}: {len(df)} rows")
+        
+        return "🎉 All data uploaded successfully!\n\n" + "\n".join(summary_lines) + "\n\nYou can now run analysis questions."
         
     except Exception as e:
-        reset_to_defaults()
-        return f"❌ Error applying data: {str(e)}. Reset to defaults."
+        return f"❌ Error processing data: {str(e)}\n\nPlease check your CSV files and try again."
 
 def run_action_html(action, budget, ai_lang):
     """Route selected question → formatted HTML output with AI language support."""
@@ -72,66 +93,78 @@ def run_action_html(action, budget, ai_lang):
             html += ai_insights
             return html
 
-    
-
         else:
             return executive_snapshot()
             
     except Exception as e:
         return f"<div style='color: red; padding: 15px; background-color: #f8d7da; border-radius: 5px;'>Error: {str(e)}</div>"
 
+def show_current_data_status():
+    """Show what data is currently loaded"""
+    status = get_data_status()
+    
+    html = "<h4>📊 Current Data Status</h4><ul>"
+    for name, status_text in status.items():
+        html += f"<li>{name}: {status_text}</li>"
+    html += "</ul>"
+    
+    return html
+
 # ---------- UI Layout ----------
 
-with gr.Blocks(title="AI POS – Cash Flow Assistant (POC)", css="""
+with gr.Blocks(title="AI POS – Cash Flow Assistant (Upload-Only)", css="""
     .ai-toggle { background-color: #e8f5e8; padding: 10px; border-radius: 5px; }
+    .upload-area { background-color: #f8f9fa; padding: 15px; border-radius: 8px; border: 2px dashed #dee2e6; }
+    .status-box { background-color: #e3f2fd; padding: 10px; border-radius: 5px; margin: 10px 0; }
 """) as app:
-    gr.Markdown("# AI POS – Cash Flow Assistant (POC)")
-    gr.Markdown("Upload your POS data or paste an API key, choose a question, and get actionable insights.")
+    gr.Markdown("# AI POS – Cash Flow Assistant")
+    gr.Markdown("**Upload your POS CSV data to get AI-powered cash flow insights. All four CSV files are required.**")
 
     with gr.Row():
         # LEFT: Data inputs
         with gr.Column(scale=1):
             with gr.Group():
-                gr.Markdown("### Data Input")
-                api_key = gr.Textbox(
-                    label="POS API Key (optional)",
-                    type="password",
-                    placeholder="Paste your POS API key (not used in this POC)."
-                )
-                gr.Markdown("**OR upload CSV files:**")
-                gr.Markdown("*Leave files empty to use default sample data*")
+                gr.Markdown("### 📁 Data Upload (Required)")
+                gr.Markdown("Upload all 4 CSV files to enable analysis:")
                 
                 # Add sample format button
-                sample_btn = gr.Button("📋 Sample CSV Format( Scroll Down to the Bottom of the Page )", size="sm")
+                sample_btn = gr.Button("📋 View CSV Format Examples", size="sm")
                 
-                tx_u = gr.File(
-                    label="Transactions CSV - All transaction line items (sales). One row per line item.",
-                    file_types=[".csv"],
-                    type="filepath"
-                )
-                rf_u = gr.File(
-                    label="Refunds CSV - Only refunds. Each row represents a refund tied to an original transaction.",
-                    file_types=[".csv"],
-                    type="filepath"
-                )
-                po_u = gr.File(
-                    label="Payouts CSV - Card settlement batches (processor payouts). Typically daily.",
-                    file_types=[".csv"],
-                    type="filepath"
-                )
-                pm_u = gr.File(
-                    label="Product Master CSV - Catalog with COGS per product.",
-                    file_types=[".csv"],
-                    type="filepath"
-                )
-                apply_btn = gr.Button("Apply Data")
-                reset_btn = gr.Button("Reset to Sample Data", variant="secondary")
-            apply_msg = gr.Markdown()
+                with gr.Group():
+                    tx_u = gr.File(
+                        label="1️⃣ Transactions CSV",
+                        file_types=[".csv"],
+                        type="filepath"
+                    )
+                    rf_u = gr.File(
+                        label="2️⃣ Refunds CSV", 
+                        file_types=[".csv"],
+                        type="filepath"
+                    )
+                    po_u = gr.File(
+                        label="3️⃣ Payouts CSV",
+                        file_types=[".csv"],
+                        type="filepath"
+                    )
+                    pm_u = gr.File(
+                        label="4️⃣ Product Master CSV",
+                        file_types=[".csv"],
+                        type="filepath"
+                    )
+                
+                with gr.Row():
+                    apply_btn = gr.Button("📤 Upload & Apply Data", variant="primary")
+                    clear_btn = gr.Button("🗑️ Clear All Data", variant="secondary")
+                
+                # Status display
+                with gr.Group():
+                    apply_msg = gr.HTML()
+                    data_status = gr.HTML(show_current_data_status())
 
         # RIGHT: Questions + Results
         with gr.Column(scale=2):
             with gr.Group():
-                gr.Markdown("### Ask the Assistant")
+                gr.Markdown("### 🤖 Ask the Assistant")
                 
                 with gr.Row():
                     action = gr.Dropdown(
@@ -140,7 +173,6 @@ with gr.Blocks(title="AI POS – Cash Flow Assistant (POC)", css="""
                             "What's eating my cash flow?",
                             "What should I reorder with budget?",
                             "How much cash can I free up?",
-                          
                         ],
                         value="What's eating my cash flow?",
                         scale=2
@@ -153,7 +185,7 @@ with gr.Blocks(title="AI POS – Cash Flow Assistant (POC)", css="""
                     )
                 
                 budget = gr.Number(label="Budget (€)", value=500, visible=False)
-                run_btn = gr.Button("Run", variant="primary")
+                run_btn = gr.Button("🚀 Run Analysis", variant="primary")
 
             result_html = gr.HTML(label="Results")
 
@@ -194,7 +226,7 @@ SNW,Sandwich,Food,2.00,6.50""")
 - **Payouts**: Daily card settlement data
 - **Product Master**: Include COGS for margin calculations
                 
-💡 **Tip**: Download these examples as templates for your own data formatting.
+💡 **Tip**: Make sure your CSV files follow these exact column names and formats.
                 """)
                 
                 with gr.Row():
@@ -213,15 +245,18 @@ SNW,Sandwich,Food,2.00,6.50""")
         return gr.update(visible=(q == "What should I reorder with budget?"))
     action.change(_toggle_budget, inputs=action, outputs=budget)
 
-    def _apply(api_key_val, txf, rff, pof, pmf):
+    def _apply(txf, rff, pof, pmf):
         dfs = _reload_data_from_uploads(txf, rff, pof, pmf)
-        return _apply_uploaded_data_to_runtime(dfs)
-    apply_btn.click(_apply, inputs=[api_key, tx_u, rf_u, po_u, pm_u], outputs=[apply_msg])
+        result = _apply_uploaded_data_to_runtime(dfs)
+        status = show_current_data_status()
+        return result, status
+    apply_btn.click(_apply, inputs=[tx_u, rf_u, po_u, pm_u], outputs=[apply_msg, data_status])
 
-    def _reset():
-        reset_to_defaults()
-        return "🔄 Reset to default sample data."
-    reset_btn.click(_reset, outputs=[apply_msg])
+    def _clear():
+        reset_to_uploads()
+        status = show_current_data_status()
+        return "🗑️ All data cleared. Please upload fresh CSV files.", status
+    clear_btn.click(_clear, outputs=[apply_msg, data_status])
 
     def _route(q, b, ai_lang):
         return run_action_html(q, b, ai_lang)

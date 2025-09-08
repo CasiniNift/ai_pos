@@ -1,7 +1,10 @@
-# src/analysis.py - Business logic with Claude AI integration
+# src/analysis.py - Business logic with upload-only data (no defaults)
 import pandas as pd
 import numpy as np
-from utils import load_transactions, load_refunds, load_payouts, load_product_master
+from utils import (
+    load_transactions, load_refunds, load_payouts, load_product_master,
+    clear_data_directory, check_data_status
+)
 from ai_assistant import CashFlowAIAssistant
 import os
 import sys
@@ -69,21 +72,19 @@ def get_text(key):
     """Get translated text for current language"""
     return TRANSLATIONS.get(CURRENT_LANGUAGE, TRANSLATIONS['en']).get(key, key)
 
-# Global variables to hold current data
+# Global variables to hold current data - NO DEFAULT LOADING
 _current_transactions = None
 _current_refunds = None
 _current_payouts = None
 _current_products = None
 
 def get_current_data():
-    """Get current data, loading defaults if none set"""
+    """Get current data - will raise error if no data uploaded"""
     global _current_transactions, _current_refunds, _current_payouts, _current_products
     
+    # Don't auto-load defaults anymore - force uploads
     if _current_transactions is None:
-        _current_transactions = load_transactions()
-        _current_refunds = load_refunds()
-        _current_payouts = load_payouts()
-        _current_products = load_product_master()
+        raise ValueError("No data loaded. Please upload CSV files first.")
     
     return _current_transactions, _current_refunds, _current_payouts, _current_products
 
@@ -93,29 +94,63 @@ def set_data(transactions=None, refunds=None, payouts=None, products=None):
     
     if transactions is not None:
         _current_transactions = transactions
+        print(f"✅ Transactions loaded: {len(_current_transactions)} rows")
     if refunds is not None:
         _current_refunds = refunds
+        print(f"✅ Refunds loaded: {len(_current_refunds)} rows")
     if payouts is not None:
         _current_payouts = payouts
+        print(f"✅ Payouts loaded: {len(_current_payouts)} rows")
     if products is not None:
         _current_products = products
-    
-    print(f"✅ Data updated: {len(_current_transactions)} transactions, {len(_current_refunds)} refunds")
+        print(f"✅ Products loaded: {len(_current_products)} rows")
 
-def reset_to_defaults():
-    """Reset to default data files"""
+def reset_to_uploads():
+    """Reset to force new uploads - clears all data"""
     global _current_transactions, _current_refunds, _current_payouts, _current_products
     
-    _current_transactions = load_transactions()
-    _current_refunds = load_refunds()
-    _current_payouts = load_payouts()
-    _current_products = load_product_master()
+    _current_transactions = None
+    _current_refunds = None
+    _current_payouts = None
+    _current_products = None
     
-    print("✅ Reset to default data")
+    # Clear the data directory
+    clear_data_directory()
+    
+    print("🗑️  All data cleared. Please upload fresh CSV files.")
+
+def get_data_status():
+    """Get status of currently loaded data"""
+    status = {}
+    
+    if _current_transactions is not None:
+        status['Transactions'] = f"✅ {len(_current_transactions)} rows loaded"
+    else:
+        status['Transactions'] = "❌ Not loaded"
+        
+    if _current_refunds is not None:
+        status['Refunds'] = f"✅ {len(_current_refunds)} rows loaded"
+    else:
+        status['Refunds'] = "❌ Not loaded"
+        
+    if _current_payouts is not None:
+        status['Payouts'] = f"✅ {len(_current_payouts)} rows loaded"
+    else:
+        status['Payouts'] = "❌ Not loaded"
+        
+    if _current_products is not None:
+        status['Products'] = f"✅ {len(_current_products)} rows loaded"
+    else:
+        status['Products'] = "❌ Not loaded"
+    
+    return status
 
 def get_processed_data():
     """Get processed transaction data with margins calculated"""
-    transactions, refunds, payouts, products = get_current_data()
+    try:
+        transactions, refunds, payouts, products = get_current_data()
+    except ValueError as e:
+        raise ValueError(f"Cannot process data: {str(e)}")
     
     # Merge product info (COGS)
     tx = transactions.merge(products[["product_id", "cogs"]], on="product_id", how="left")
@@ -127,7 +162,22 @@ def get_processed_data():
 
 def executive_snapshot():
     """Return a multilingual HTML executive snapshot."""
-    tx, refunds, payouts = get_processed_data()
+    try:
+        tx, refunds, payouts = get_processed_data()
+    except ValueError as e:
+        return f"""
+        <div style='color: red; padding: 15px; background-color: #f8d7da; border-radius: 5px;'>
+        <h3>⚠️ No Data Available</h3>
+        <p>{str(e)}</p>
+        <p><strong>Please upload all required CSV files:</strong></p>
+        <ul>
+            <li>Transactions CSV</li>
+            <li>Refunds CSV</li>
+            <li>Payouts CSV</li>
+            <li>Product Master CSV</li>
+        </ul>
+        </div>
+        """
     
     card_sales = float(tx.loc[tx["payment_type"] == "CARD", "line_total"].sum())
     cash_sales = float(tx.loc[tx["payment_type"] == "CASH", "line_total"].sum())
@@ -224,75 +274,19 @@ def format_ai_response(text):
             else:
                 formatted_paragraphs.append(f'<p>{para}</p>')
         
-        # Check if it's a bullet point or sub-item (a., b., c.)
-        elif para.startswith(('- ', 'a. ', 'b. ', 'c. ', 'd. ', 'e. ')):
-            # Handle sub-items with proper formatting
-            if para.startswith(('a. ', 'b. ', 'c. ', 'd. ', 'e. ')):
-                parts = para.split('. ', 1)
-                if len(parts) == 2:
-                    letter = parts[0]
-                    content = parts[1]
-                    # Check if there's a header with colon
-                    if ': ' in content:
-                        header_part = content.split(': ')[0].strip()
-                        remaining_content = content.split(': ', 1)[1].strip()
-                        formatted_paragraphs.append(f'<p style="margin-left: 20px;"><strong>{letter}. {header_part}:</strong> {remaining_content}</p>')
-                    else:
-                        formatted_paragraphs.append(f'<p style="margin-left: 20px;"><strong>{letter}.</strong> {content}</p>')
-                else:
-                    formatted_paragraphs.append(f'<p style="margin-left: 20px;">{para}</p>')
-            else:
-                # Regular bullet point
-                formatted_paragraphs.append(f'<p style="margin-left: 20px;">• {para[2:]}</p>')
-        
-        # Check if it contains a colon (likely a section header)
-        elif ':' in para and len(para.split(':')[0]) < 100 and not '<strong>' in para:
-            parts = para.split(':', 1)
-            if len(parts) == 2:
-                header = parts[0].strip()
-                content = parts[1].strip()
-                formatted_paragraphs.append(f'<p><strong>{header}:</strong> {content}</p>')
-            else:
-                formatted_paragraphs.append(f'<p>{para}</p>')
-        
         # Regular paragraph
         else:
             formatted_paragraphs.append(f'<p>{para}</p>')
-    
-    # If no proper formatting was applied, split by sentences for readability
-    if len(formatted_paragraphs) <= 1 and text:
-        sentences = text.split('. ')
-        formatted_sentences = []
-        current_para = []
-        
-        for i, sentence in enumerate(sentences):
-            sentence = sentence.strip()
-            if not sentence:
-                continue
-                
-            # Add period back if it's not the last sentence
-            if i < len(sentences) - 1 and not sentence.endswith('.'):
-                sentence += '.'
-            
-            current_para.append(sentence)
-            
-            # Break into new paragraph every 2-3 sentences or when we detect a topic change
-            if (len(current_para) >= 2 and any(keyword in sentence.lower() for keyword in 
-                ['raccomand', 'suggest', 'consider', 'important', 'consiglio', 'inoltre', 'è importante'])) or len(current_para) >= 3:
-                formatted_sentences.append(f'<p>{" ".join(current_para)}</p>')
-                current_para = []
-        
-        # Add any remaining sentences
-        if current_para:
-            formatted_sentences.append(f'<p>{" ".join(current_para)}</p>')
-        
-        return '\n'.join(formatted_sentences)
     
     return '\n'.join(formatted_paragraphs)
 
 def cash_eaters(ui_language="English"):
     """Show where cash is leaking + lowest margin SKUs with AI analysis."""
-    tx, refunds, payouts = get_processed_data()
+    try:
+        tx, refunds, payouts = get_processed_data()
+    except ValueError as e:
+        error_msg = f"<div style='color: red; padding: 15px;'>Error: {str(e)}</div>"
+        return error_msg, None, None, error_msg
     
     ce = pd.DataFrame([
         {"category": get_text('discounts'), "amount": float(tx["discount"].sum())},
@@ -334,7 +328,11 @@ def cash_eaters(ui_language="English"):
 
 def reorder_plan(budget=500.0, ui_language="English"):
     """Suggest what to reorder with a given budget with AI analysis."""
-    tx, refunds, payouts = get_processed_data()
+    try:
+        tx, refunds, payouts = get_processed_data()
+    except ValueError as e:
+        error_msg = f"<div style='color: red; padding: 15px;'>Error: {str(e)}</div>"
+        return error_msg, f"Error: {str(e)}", None, error_msg
     
     days = (tx["day"].max() - tx["day"].min()).days + 1
     sku_daily = tx.groupby(["product_id", "product_name", "cogs"], as_index=False).agg(
@@ -398,7 +396,11 @@ def reorder_plan(budget=500.0, ui_language="English"):
 
 def free_up_cash(ui_language="English"):
     """Estimate extra cash if we discount slow movers with AI analysis."""
-    tx, refunds, payouts = get_processed_data()
+    try:
+        tx, refunds, payouts = get_processed_data()
+    except ValueError as e:
+        error_msg = f"<div style='color: red; padding: 15px;'>Error: {str(e)}</div>"
+        return error_msg, f"Error: {str(e)}", None, error_msg
     
     days = (tx["day"].max() - tx["day"].min()).days + 1
     sku_daily = tx.groupby(["product_id", "product_name"], as_index=False).agg(qty=("quantity", "sum"))
@@ -441,29 +443,7 @@ def free_up_cash(ui_language="English"):
     
     return executive_snapshot(), msg, slow, ai_insights
 
-def sales_impact_scenario(ui_language="English"):
-    """Analyze sales impact scenario - exactly like the other working functions."""
-    tx, refunds, payouts = get_processed_data()
-    
-    # Calculate the actual impact
-    current_revenue = float(tx['line_total'].sum())
-    impact_amount = current_revenue * 0.1
-    
-    # Get AI insights using Claude (same pattern as other functions)
-    if ai_assistant.is_available():
-        try:
-            # Prepare business context
-            transactions, refunds_df, payouts_df, products = get_current_data()
-            business_context = ai_assistant._prepare_business_context(tx, refunds_df, payouts_df, products)
-            
-            # Get AI analysis
-            language = get_language_from_ui_language(ui_language)
-            ai_text = ai_assistant.analyze_sales_impact(business_context, 10, language)
-            ai_insights = generate_ai_insights_html(ai_text, get_text('ai_analysis'))
-            
-        except Exception as e:
-            ai_insights = generate_ai_insights_html(f"Error generating AI insights: {str(e)}")
-    else:
-        ai_insights = generate_ai_insights_html("AI analysis requires Claude API key. Set ANTHROPIC_API_KEY environment variable.")
-    
-    return executive_snapshot(), ai_insights
+# Remove the old reset_to_defaults function and replace with upload-only version
+def reset_to_defaults():
+    """Legacy function - now redirects to upload-only mode"""
+    return reset_to_uploads()
