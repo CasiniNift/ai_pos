@@ -88,19 +88,14 @@ def _connect_api(provider, api_key, endpoint, start_date, end_date):
         try:
             from square_api import SquareAPIConnector
             
-            # Initialize connector
             connector = SquareAPIConnector(api_key, environment="sandbox")
-            
-            # Test connection first
             success, test_message = connector.test_connection()
             if not success:
                 return f"❌ Connection failed: {test_message}"
             
-            # Generate mock data for testing
             print(f"🔌 Fetching Square data from {start_date} to {end_date}...")
             mock_data = connector.generate_mock_data(start_date, end_date)
             
-            # Apply the data to our analysis system
             from analysis import set_data
             set_data(
                 transactions=mock_data["transactions"],
@@ -131,6 +126,50 @@ def _connect_api(provider, api_key, endpoint, start_date, end_date):
         except Exception as e:
             return f"❌ Error connecting to Square: {str(e)}"
     
+    # Handle Stripe API integration  
+    elif provider == "Stripe":
+        try:
+            from stripe_api import StripeAPIConnector
+            
+            connector = StripeAPIConnector(api_key)
+            success, test_message = connector.test_connection()
+            if not success:
+                return f"❌ Connection failed: {test_message}"
+            
+            print(f"💳 Fetching Stripe data from {start_date} to {end_date}...")
+            mock_data = connector.generate_mock_data(start_date, end_date)
+            
+            from analysis import set_data
+            set_data(
+                transactions=mock_data["transactions"],
+                refunds=mock_data["refunds"],
+                payouts=mock_data["payouts"],
+                products=mock_data["products"]
+            )
+            
+            return f"""
+            🎉 **Stripe connection successful!**
+            
+            **Provider:** {provider}
+            **Environment:** {connector.environment.title()}
+            **Date Range:** {start_date} to {end_date}
+            **Connection:** {test_message}
+            
+            **Data Retrieved:**
+            ✅ Transactions: {len(mock_data["transactions"])} rows
+            ✅ Products: {len(mock_data["products"])} items  
+            ✅ Refunds: {len(mock_data["refunds"])} refunds
+            ✅ Payouts: {len(mock_data["payouts"])} settlements
+            
+            **Business Type:** Digital services & subscriptions
+            **You can now run analysis questions!**
+            """
+            
+        except ImportError:
+            return "❌ Stripe API connector not found. Please ensure stripe_api.py is in the src/ directory."
+        except Exception as e:
+            return f"❌ Error connecting to Stripe: {str(e)}"
+    
     # For other providers, return placeholder message
     return f"""
     🔌 API Connection Initiated...
@@ -141,7 +180,7 @@ def _connect_api(provider, api_key, endpoint, start_date, end_date):
     **Endpoint:** {endpoint if endpoint else "Default"}
     
     ⚠️ **Note:** {provider} integration is in development. 
-    Square integration is currently available for testing.
+    Square and Stripe integrations are currently available for testing.
     """
 
 def _test_api_connection(provider, api_key, endpoint):
@@ -149,23 +188,160 @@ def _test_api_connection(provider, api_key, endpoint):
     if not api_key:
         return "⚠️ Please enter your API key to test."
     
-    # Simulate API testing
+    # Handle Square API testing
+    if provider == "Square":
+        try:
+            from square_api import SquareAPIConnector
+            
+            connector = SquareAPIConnector(api_key, environment="sandbox")
+            success, message = connector.test_connection()
+            
+            if success:
+                return f"""
+                🧪 **Square API Test Results**
+                
+                **Environment:** Sandbox
+                **API Key:** {api_key[:10]}... ✅ Valid format
+                **Authentication:** ✅ Successful
+                **Connection:** {message}
+                
+                🎉 **Ready to fetch data!** 
+                Use "Connect & Fetch Data" to retrieve your Square transaction data.
+                
+                **Available Features:**
+                • Transaction history
+                • Product catalog
+                • Payment settlements
+                • Refund tracking
+                """
+            else:
+                return f"""
+                🧪 **Square API Test Results**
+                
+                **Environment:** Sandbox  
+                **API Key:** {api_key[:10]}... ❌ Invalid
+                **Error:** {message}
+                
+                **Troubleshooting:**
+                • Verify you're using a Square Sandbox access token
+                • Check that the token isn't expired
+                • Ensure you have proper permissions
+                • Visit https://developer.squareup.com/ for help
+                """
+                
+        except ImportError:
+            return "❌ Square API connector not available. Please ensure square_api.py is installed."
+        except Exception as e:
+            return f"❌ Error testing Square connection: {str(e)}"
+    
+    # Handle Shopify API testing
+    elif provider == "Shopify":
+        try:
+            from shopify_api import ShopifyAPIConnector
+            
+            shop_name = "demo-store"  # In real implementation, this would be a separate field
+            connector = ShopifyAPIConnector(shop_name, api_key)
+            success, message = connector.test_connection()
+            
+            if success:
+                return f"""
+                🧪 **Shopify API Test Results**
+                
+                **Store:** {shop_name}
+                **API Key:** {api_key[:10]}... ✅ Valid format
+                **Authentication:** ✅ Successful
+                **Connection:** {message}
+                
+                🎉 **Ready to fetch data!** 
+                Use "Connect & Fetch Data" to retrieve your Shopify order data.
+                
+                **Available Features:**
+                • Order history
+                • Product catalog
+                • Customer data
+                • Inventory tracking
+                """
+            else:
+                return f"""
+                🧪 **Shopify API Test Results**
+                
+                **Store:** {shop_name}
+                **API Key:** {api_key[:10]}... ❌ Invalid
+                **Error:** {message}
+                
+                **Troubleshooting:**
+                • Verify your private app access token
+                • Check store permissions
+                • Ensure API access is enabled
+                • Visit https://help.shopify.com/en/api for help
+                """
+                
+        except ImportError:
+            return "❌ Shopify API connector not available. Please ensure shopify_api.py is installed."
+        except Exception as e:
+            return f"❌ Error testing Shopify connection: {str(e)}"
+    
+    # Handle Stripe API testing
+    elif provider == "Stripe":
+        try:
+            from stripe_api import StripeAPIConnector
+            
+            connector = StripeAPIConnector(api_key)
+            success, message = connector.test_connection()
+            
+            if success:
+                return f"""
+                🧪 **Stripe API Test Results**
+                
+                **Environment:** {connector.environment.title()}
+                **API Key:** {api_key[:10]}... ✅ Valid format
+                **Authentication:** ✅ Successful
+                **Connection:** {message}
+                
+                🎉 **Ready to fetch data!** 
+                Use "Connect & Fetch Data" to retrieve your Stripe payment data.
+                
+                **Available Features:**
+                • Payment history
+                • Customer data
+                • Subscription tracking
+                • Payout information
+                """
+            else:
+                return f"""
+                🧪 **Stripe API Test Results**
+                
+                **Environment:** {connector.environment.title()}
+                **API Key:** {api_key[:10]}... ❌ Invalid
+                **Error:** {message}
+                
+                **Troubleshooting:**
+                • Verify your secret key (sk_test_... or sk_live_...)
+                • Check API permissions
+                • Ensure account is active
+                • Visit https://stripe.com/docs/api for help
+                """
+                
+        except ImportError:
+            return "❌ Stripe API connector not available. Please ensure stripe_api.py is installed."
+        except Exception as e:
+            return f"❌ Error testing Stripe connection: {str(e)}"
+    
+    # For other providers, simulate testing
     return f"""
     🧪 Testing connection to {provider}...
     
     **API Key:** {api_key[:10]}... ✅ Format valid
-    **Endpoint:** {endpoint if endpoint else "Default"} ✅ Reachable
-    **Authentication:** ✅ Valid credentials
-    **Permissions:** ✅ Read access confirmed
+    **Endpoint:** {endpoint if endpoint else "Default"} ⚠️ Simulated
+    **Authentication:** ⚠️ Not implemented yet
+    **Permissions:** ⚠️ Not implemented yet
     
-    🎉 **Connection successful!** 
-    You can now fetch data using the "Connect & Fetch Data" button.
+    ⚠️ **{provider} integration coming soon!** 
+    Square integration is currently available for testing.
     
-    **Available Data:**
-    • Transactions: Last 90 days
-    • Products: Full catalog
-    • Payments: Settlement data
-    • Refunds: All processed refunds
+    **Available Now:**
+    • Square Sandbox testing
+    • CSV file upload
     """
 
 def _toggle_endpoint_visibility(provider):
@@ -240,7 +416,6 @@ with gr.Blocks(title="AI POS – Cash Flow Assistant (Upload-Only)", css="""
                         pos_provider = gr.Dropdown(
                             label="POS Provider",
                             choices=[
-                                "SumUp",
                                 "Square", 
                                 "Shopify", 
                                 "Stripe", 
@@ -282,7 +457,7 @@ with gr.Blocks(title="AI POS – Cash Flow Assistant (Upload-Only)", css="""
                                 info="Format: YYYY-MM-DD",
                                 scale=1
                             )
-
+                        
                         with gr.Row():
                             connect_btn = gr.Button("🔌 Connect & Fetch Data", variant="primary")
                             test_btn = gr.Button("🧪 Test Connection", variant="secondary")
