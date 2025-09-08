@@ -67,31 +67,81 @@ def _apply_uploaded_data_to_runtime(dfs: dict):
     except Exception as e:
         return f"❌ Error processing data: {str(e)}\n\nPlease check your CSV files and try again."
 
-def _connect_api(provider, api_key, endpoint, date_range):
+def _connect_api(provider, api_key, endpoint, start_date, end_date):
     """Connect to POS API and fetch data."""
     if not api_key:
         return "⚠️ Please enter your API key."
     
-    if not date_range or len(date_range) != 2:
-        return "⚠️ Please select a valid date range."
+    if not start_date or not end_date:
+        return "⚠️ Please enter both start and end dates."
     
-    # For now, return a placeholder message
-    # This is where we'll implement actual API connections
+    # Validate date format
+    try:
+        from datetime import datetime
+        datetime.strptime(start_date, "%Y-%m-%d")
+        datetime.strptime(end_date, "%Y-%m-%d")
+    except ValueError:
+        return "⚠️ Please use YYYY-MM-DD date format (e.g., 2025-01-01)"
+    
+    # Handle Square API integration
+    if provider == "Square":
+        try:
+            from square_api import SquareAPIConnector
+            
+            # Initialize connector
+            connector = SquareAPIConnector(api_key, environment="sandbox")
+            
+            # Test connection first
+            success, test_message = connector.test_connection()
+            if not success:
+                return f"❌ Connection failed: {test_message}"
+            
+            # Generate mock data for testing
+            print(f"🔌 Fetching Square data from {start_date} to {end_date}...")
+            mock_data = connector.generate_mock_data(start_date, end_date)
+            
+            # Apply the data to our analysis system
+            from analysis import set_data
+            set_data(
+                transactions=mock_data["transactions"],
+                refunds=mock_data["refunds"],
+                payouts=mock_data["payouts"],
+                products=mock_data["products"]
+            )
+            
+            return f"""
+            🎉 **Square connection successful!**
+            
+            **Provider:** {provider}
+            **Environment:** Sandbox
+            **Date Range:** {start_date} to {end_date}
+            **Connection:** {test_message}
+            
+            **Data Retrieved:**
+            ✅ Transactions: {len(mock_data["transactions"])} rows
+            ✅ Products: {len(mock_data["products"])} items  
+            ✅ Refunds: {len(mock_data["refunds"])} refunds
+            ✅ Payouts: {len(mock_data["payouts"])} settlements
+            
+            **You can now run analysis questions!**
+            """
+            
+        except ImportError:
+            return "❌ Square API connector not found. Please ensure square_api.py is in the src/ directory."
+        except Exception as e:
+            return f"❌ Error connecting to Square: {str(e)}"
+    
+    # For other providers, return placeholder message
     return f"""
     🔌 API Connection Initiated...
     
     **Provider:** {provider}
     **API Key:** {api_key[:10]}... (hidden for security)
-    **Date Range:** {date_range[0]} to {date_range[1]}
+    **Date Range:** {start_date} to {end_date}
     **Endpoint:** {endpoint if endpoint else "Default"}
     
-    ⚠️ **Note:** API integration is in development. 
-    For now, please use CSV upload to test the system.
-    
-    **Coming Soon:**
-    • Automatic data fetching from {provider}
-    • Real-time sync capabilities
-    • Incremental data updates
+    ⚠️ **Note:** {provider} integration is in development. 
+    Square integration is currently available for testing.
     """
 
 def _test_api_connection(provider, api_key, endpoint):
@@ -190,6 +240,7 @@ with gr.Blocks(title="AI POS – Cash Flow Assistant (Upload-Only)", css="""
                         pos_provider = gr.Dropdown(
                             label="POS Provider",
                             choices=[
+                                "SumUp",
                                 "Square", 
                                 "Shopify", 
                                 "Stripe", 
