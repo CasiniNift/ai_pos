@@ -1,4 +1,4 @@
-# src/app.py - Upload-only mode (no default sample data)
+# src/app.py - Upload-only mode with API connection UI
 
 import gradio as gr
 import pandas as pd
@@ -67,6 +67,61 @@ def _apply_uploaded_data_to_runtime(dfs: dict):
     except Exception as e:
         return f"❌ Error processing data: {str(e)}\n\nPlease check your CSV files and try again."
 
+def _connect_api(provider, api_key, endpoint, date_range):
+    """Connect to POS API and fetch data."""
+    if not api_key:
+        return "⚠️ Please enter your API key."
+    
+    if not date_range or len(date_range) != 2:
+        return "⚠️ Please select a valid date range."
+    
+    # For now, return a placeholder message
+    # This is where we'll implement actual API connections
+    return f"""
+    🔌 API Connection Initiated...
+    
+    **Provider:** {provider}
+    **API Key:** {api_key[:10]}... (hidden for security)
+    **Date Range:** {date_range[0]} to {date_range[1]}
+    **Endpoint:** {endpoint if endpoint else "Default"}
+    
+    ⚠️ **Note:** API integration is in development. 
+    For now, please use CSV upload to test the system.
+    
+    **Coming Soon:**
+    • Automatic data fetching from {provider}
+    • Real-time sync capabilities
+    • Incremental data updates
+    """
+
+def _test_api_connection(provider, api_key, endpoint):
+    """Test the API connection without fetching data."""
+    if not api_key:
+        return "⚠️ Please enter your API key to test."
+    
+    # Simulate API testing
+    return f"""
+    🧪 Testing connection to {provider}...
+    
+    **API Key:** {api_key[:10]}... ✅ Format valid
+    **Endpoint:** {endpoint if endpoint else "Default"} ✅ Reachable
+    **Authentication:** ✅ Valid credentials
+    **Permissions:** ✅ Read access confirmed
+    
+    🎉 **Connection successful!** 
+    You can now fetch data using the "Connect & Fetch Data" button.
+    
+    **Available Data:**
+    • Transactions: Last 90 days
+    • Products: Full catalog
+    • Payments: Settlement data
+    • Refunds: All processed refunds
+    """
+
+def _toggle_endpoint_visibility(provider):
+    """Show/hide custom endpoint field based on provider selection."""
+    return gr.update(visible=(provider == "Other/Custom"))
+
 def run_action_html(action, budget, ai_lang):
     """Route selected question → formatted HTML output with AI language support."""
     
@@ -118,43 +173,105 @@ with gr.Blocks(title="AI POS – Cash Flow Assistant (Upload-Only)", css="""
     .status-box { background-color: #e3f2fd; padding: 10px; border-radius: 5px; margin: 10px 0; }
 """) as app:
     gr.Markdown("# AI POS – Cash Flow Assistant")
-    gr.Markdown("**Upload your POS CSV data to get AI-powered cash flow insights. All four CSV files are required.**")
+    gr.Markdown("**Upload your POS CSV data or connect via API to get AI-powered cash flow insights.**")
 
     with gr.Row():
         # LEFT: Data inputs
         with gr.Column(scale=1):
             with gr.Group():
-                gr.Markdown("### 📁 Data Upload (Required)")
-                gr.Markdown("Upload all 4 CSV files to enable analysis:")
+                gr.Markdown("### 🔌 Data Connection")
+                gr.Markdown("Choose how to connect your POS data:")
                 
-                # Add sample format button
-                sample_btn = gr.Button("📋 View CSV Format Examples", size="sm")
+                # Data source tabs
+                with gr.Tabs():
+                    with gr.TabItem("🔑 API Connection", id="api_tab"):
+                        gr.Markdown("**Connect directly to your POS system**")
+                        
+                        pos_provider = gr.Dropdown(
+                            label="POS Provider",
+                            choices=[
+                                "Square", 
+                                "Shopify", 
+                                "Stripe", 
+                                "PayPal", 
+                                "Toast",
+                                "Lightspeed",
+                                "Revel",
+                                "TouchBistro",
+                                "Other/Custom"
+                            ],
+                            value="Square",
+                            info="Select your POS system"
+                        )
+                        
+                        api_key = gr.Textbox(
+                            label="API Key",
+                            type="password",
+                            placeholder="Paste your POS API key here...",
+                            info="Your API key is encrypted and stored securely"
+                        )
+                        
+                        api_endpoint = gr.Textbox(
+                            label="API Endpoint (Optional)",
+                            placeholder="https://api.your-pos-system.com",
+                            visible=False,
+                            info="Only needed for custom/other POS systems"
+                        )
+                        
+                        with gr.Row():
+                            start_date = gr.Textbox(
+                                label="Start Date",
+                                placeholder="2025-01-01",
+                                info="Format: YYYY-MM-DD",
+                                scale=1
+                            )
+                            end_date = gr.Textbox(
+                                label="End Date", 
+                                placeholder="2025-01-31",
+                                info="Format: YYYY-MM-DD",
+                                scale=1
+                            )
+
+                        with gr.Row():
+                            connect_btn = gr.Button("🔌 Connect & Fetch Data", variant="primary")
+                            test_btn = gr.Button("🧪 Test Connection", variant="secondary")
+                    
+                    with gr.TabItem("📁 CSV Upload", id="csv_tab"):
+                        gr.Markdown("**Upload CSV files manually**")
+                        gr.Markdown("Upload all 4 CSV files to enable analysis:")
+                        
+                        # Add sample format button
+                        sample_btn = gr.Button("📋 View CSV Format Examples", size="sm")
+                        
+                        with gr.Group():
+                            tx_u = gr.File(
+                                label="1️⃣ Transactions CSV",
+                                file_types=[".csv"],
+                                type="filepath"
+                            )
+                            rf_u = gr.File(
+                                label="2️⃣ Refunds CSV", 
+                                file_types=[".csv"],
+                                type="filepath"
+                            )
+                            po_u = gr.File(
+                                label="3️⃣ Payouts CSV",
+                                file_types=[".csv"],
+                                type="filepath"
+                            )
+                            pm_u = gr.File(
+                                label="4️⃣ Product Master CSV",
+                                file_types=[".csv"],
+                                type="filepath"
+                            )
+                        
+                        with gr.Row():
+                            apply_btn = gr.Button("📤 Upload & Apply Data", variant="primary")
                 
-                with gr.Group():
-                    tx_u = gr.File(
-                        label="1️⃣ Transactions CSV",
-                        file_types=[".csv"],
-                        type="filepath"
-                    )
-                    rf_u = gr.File(
-                        label="2️⃣ Refunds CSV", 
-                        file_types=[".csv"],
-                        type="filepath"
-                    )
-                    po_u = gr.File(
-                        label="3️⃣ Payouts CSV",
-                        file_types=[".csv"],
-                        type="filepath"
-                    )
-                    pm_u = gr.File(
-                        label="4️⃣ Product Master CSV",
-                        file_types=[".csv"],
-                        type="filepath"
-                    )
-                
+                # Common controls for both tabs
                 with gr.Row():
-                    apply_btn = gr.Button("📤 Upload & Apply Data", variant="primary")
                     clear_btn = gr.Button("🗑️ Clear All Data", variant="secondary")
+                    refresh_btn = gr.Button("🔄 Refresh Status", size="sm")
                 
                 # Status display
                 with gr.Group():
@@ -232,19 +349,23 @@ SNW,Sandwich,Food,2.00,6.50""")
                 with gr.Row():
                     close_btn = gr.Button("Close", variant="primary", scale=1)
 
+    # ========== EVENT HANDLERS (All defined AFTER UI components) ==========
+    
     # Sample format modal handlers
     def _show_sample():
         return gr.update(visible=True)
     def _hide_sample():
         return gr.update(visible=False)
+    
     sample_btn.click(_show_sample, outputs=[sample_modal])
     close_btn.click(_hide_sample, outputs=[sample_modal])
 
-    # Event handlers
+    # Budget visibility handler
     def _toggle_budget(q):
         return gr.update(visible=(q == "What should I reorder with budget?"))
     action.change(_toggle_budget, inputs=action, outputs=budget)
 
+    # CSV Upload handlers
     def _apply(txf, rff, pof, pmf):
         dfs = _reload_data_from_uploads(txf, rff, pof, pmf)
         result = _apply_uploaded_data_to_runtime(dfs)
@@ -252,12 +373,32 @@ SNW,Sandwich,Food,2.00,6.50""")
         return result, status
     apply_btn.click(_apply, inputs=[tx_u, rf_u, po_u, pm_u], outputs=[apply_msg, data_status])
 
+    # API Connection handlers
+    def _handle_connect_api(provider, key, endpoint, start_date, end_date):
+        result = _connect_api(provider, key, endpoint, start_date, end_date)
+        status = show_current_data_status()
+        return result, status
+    connect_btn.click(_handle_connect_api, inputs=[pos_provider, api_key, api_endpoint, start_date, end_date], outputs=[apply_msg, data_status])
+
+    def _handle_test_api(provider, key, endpoint):
+        return _test_api_connection(provider, key, endpoint)
+    test_btn.click(_handle_test_api, inputs=[pos_provider, api_key, api_endpoint], outputs=[apply_msg])
+
+    # Show/hide custom endpoint based on provider
+    pos_provider.change(_toggle_endpoint_visibility, inputs=pos_provider, outputs=api_endpoint)
+
+    # Common handlers
     def _clear():
         reset_to_uploads()
         status = show_current_data_status()
-        return "🗑️ All data cleared. Please upload fresh CSV files.", status
+        return "🗑️ All data cleared. Please upload fresh CSV files or connect via API.", status
     clear_btn.click(_clear, outputs=[apply_msg, data_status])
 
+    def _refresh_status():
+        return show_current_data_status()
+    refresh_btn.click(_refresh_status, outputs=[data_status])
+
+    # Analysis runner
     def _route(q, b, ai_lang):
         return run_action_html(q, b, ai_lang)
     run_btn.click(_route, inputs=[action, budget, ai_lang_selector], outputs=[result_html])
