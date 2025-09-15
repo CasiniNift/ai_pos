@@ -45,7 +45,7 @@ An intelligent Point-of-Sale cash flow analysis tool that helps businesses under
 
 1. **Start the application**
    ```bash
-   python src/app.py
+   python3 src/app.py
    ```
 
 2. **Open your browser**

@@ -1,12 +1,16 @@
-# Core data stack
 pandas>=2.0.0
 numpy>=1.24.0
 
-# UI
-gradio>=3.50.0
+# UI - Fixed versions to avoid conflicts
+gradio>=4.0.0,<5.0.0
+fastapi>=0.104.0
+jinja2>=3.1.0
+
+# AI Integration
+anthropic>=0.7.0
 
 # Development tools
-watchdog>=3.0.0  # For auto-reload functionality
+watchdog>=3.0.0
 
 # Optional but useful for dev
 jupyter

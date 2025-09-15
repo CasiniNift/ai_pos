@@ -182,7 +182,6 @@ def _connect_api(provider, api_key, endpoint, start_date, end_date):
     ⚠️ **Note:** {provider} integration is in development. 
     Square and Stripe integrations are currently available for testing.
     """
-
 def _test_api_connection(provider, api_key, endpoint):
     """Test the API connection without fetching data."""
     if not api_key:
@@ -416,7 +415,8 @@ with gr.Blocks(title="AI POS – Cash Flow Assistant (Upload-Only)", css="""
                         pos_provider = gr.Dropdown(
                             label="POS Provider",
                             choices=[
-                                "Square", 
+                                "Square",
+                                "SumUp", 
                                 "Shopify", 
                                 "Stripe", 
                                 "PayPal", 
