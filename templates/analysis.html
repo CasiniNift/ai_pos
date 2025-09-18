@@ -1,0 +1,66 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Analysis Results - AI POS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .ai-insights { 
+            background-color: #e8f5e8; 
+            padding: 15px; 
+            border-radius: 8px; 
+            margin: 15px 0; 
+            border-left: 4px solid #28a745;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>📊 Analysis: {{ question }}</h1>
+            <a href="/" class="btn btn-secondary">← Back</a>
+        </div>
+        
+        <!-- Snapshot -->
+        <div class="card mb-4">
+            <div class="card-header"><h4>📈 Executive Snapshot</h4></div>
+            <div class="card-body">
+                {{ snapshot | safe }}
+            </div>
+        </div>
+        
+        <!-- Cash Eaters Table -->
+        {% if cash_eaters_table %}
+        <div class="card mb-4">
+            <div class="card-header"><h4>💸 Cash Drains</h4></div>
+            <div class="card-body">
+                {{ cash_eaters_table | safe }}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Low Margin Table -->
+        {% if low_margin_table %}
+        <div class="card mb-4">
+            <div class="card-header"><h4>📉 Lowest Margin Products</h4></div>
+            <div class="card-body">
+                {{ low_margin_table | safe }}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- AI Insights -->
+        {% if ai_insights %}
+        <div class="ai-insights">
+            {{ ai_insights | safe }}
+        </div>
+        {% endif %}
+        
+        <div class="mt-4">
+            <a href="/" class="btn btn-primary">Run Another Analysis</a>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

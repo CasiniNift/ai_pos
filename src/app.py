@@ -881,6 +881,7 @@ SNW,Sandwich,Food,2.00,6.50""")
 # ---------- Launch App from multiple devices in your local network ----------
 if __name__ == "__main__":
     app.launch(
-        share=True,  # This creates a public URL
-        inbrowser=True
+        share=True,
+        inbrowser=True,
+        show_api=False  # This fixes the API error
     )
