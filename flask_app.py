@@ -15,7 +15,7 @@ sys.path.append('src')
 try:
     from analysis import (
         cash_eaters, reorder_plan, free_up_cash, executive_snapshot, 
-        set_data, reset_to_uploads, get_data_status
+        set_data, reset_to_uploads, get_data_status, analyze_executive_summary
     )
     from utils import (
         load_csv_from_uploads, persist_uploads_to_data_dir,
@@ -218,30 +218,36 @@ def analyze(question):
                                  main_table=format_df_as_html(slow, "🐌 Slow-Moving Inventory"),
                                  secondary_table="",
                                  ai_insights=ai_insights,
-                                 show_budget_form=False)
+                                 show_budget_form=False) 
         
         else:
-            # Default to executive summary
+            # Executive summary with AI analysis
             snap = executive_snapshot()
-            return render_template('analysis.html',
-                                 question="Executive Summary",
-                                 snapshot=snap,
-                                 main_table="",
-                                 secondary_table="",
-                                 ai_insights="",
-                                 show_budget_form=False)
             
+            # Get executive AI analysis
+            try:
+                ai_insights = analyze_executive_summary(language)
+            except Exception as e:
+                ai_insights = f"<div class='alert alert-warning'>Error generating executive analysis: {str(e)}</div>"
+            
+            return render_template('analysis.html',
+                                question="Executive Summary",
+                                snapshot=snap,
+                                main_table="",
+                                secondary_table="",
+                                ai_insights=ai_insights,
+                                show_budget_form=False)
     except Exception as e:
-        error_msg = f"Analysis error: {str(e)}"
-        print(f"Analysis error: {traceback.format_exc()}")
-        
+        error_msg=f"Analysis error: {str(e)}"
+        print(f"{error_msg}\n{traceback.format_exc()}")
+
         return render_template('analysis.html',
-                             question="Error",
-                             snapshot=f"<div class='alert alert-danger'>{error_msg}</div>",
-                             main_table="",
-                             secondary_table="",
-                             ai_insights="Please ensure you've uploaded all required CSV files first.",
-                             show_budget_form=False)
+                                question="Error",
+                                snapshot=f"<div class='alert alert-danger'>{error_msg}</div>",
+                                main_table="",
+                                secondary_table="",
+                                ai_insights="Please ensure you've uploaded all required CSV files first.",
+                                show_budget_form=False)
 
 @app.route('/clear_data')
 def clear_data():

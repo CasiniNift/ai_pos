@@ -299,7 +299,7 @@ def cash_eaters(ui_language="English"):
     sku["margin_pct"] = np.where(sku["revenue"] > 0, sku["gp"] / sku["revenue"], 0.0)
     low = sku.sort_values(["margin_pct", "revenue"]).head(5)
 
-    # Get AI insights using Claude
+    # Get AI insights using Claude with improved formatting
     if ai_assistant.is_available():
         try:
             # Prepare business context
@@ -314,36 +314,51 @@ def cash_eaters(ui_language="English"):
                 'low_margin_products': low.to_string()
             }
             
-            # Get AI analysis
+            # Get AI analysis with specific formatting request
             language = get_language_from_ui_language(ui_language)
-            ai_text = ai_assistant.analyze_cash_eaters(business_context, cash_eaters_data, language)
             
-            # Debug version with visible styling
-            ai_insights = f"""
-            <div style='background: white; color: black; padding: 20px; border: 2px solid green; margin: 10px 0; border-radius: 8px;'>
-            <h4 style='color: black; margin: 10px 0;'>🤖 AI Analysis</h4>
-            <div style='color: black; font-size: 14px; line-height: 1.5;'>
-            {ai_text}
-            </div>
-            </div>
+            # Enhanced prompt for better formatting
+            enhanced_prompt = f"""
+            Analyze the cash flow issues and provide a structured response with clear sections:
+
+            BUSINESS CONTEXT:
+            {business_context}
+
+            CASH FLOW DATA:
+            - Discounts: €{cash_eaters_data['discounts']:,.2f}
+            - Refunds: €{cash_eaters_data['refunds']:,.2f}
+            - Processor Fees: €{cash_eaters_data['processor_fees']:,.2f}
+
+            LOW MARGIN PRODUCTS:
+            {cash_eaters_data['low_margin_products']}
+
+            Please provide analysis in this exact format with numbered sections:
+
+            1. **Biggest cash drain assessment** (2-3 sentences identifying the main issue)
+
+            2. **Specific actionable recommendations** (3-4 concrete steps to address the issues)
+
+            3. **Quick wins for this week** (immediate actions that can be implemented right away)
+
+            Use clear paragraph breaks and avoid long dense paragraphs. Each section should be easy to scan and understand.
             """
+            
+            # Make the AI request with the enhanced prompt
+            ai_text = ai_assistant._make_claude_request(
+                system_prompt=f"You are an expert retail financial advisor who gives clear, actionable advice. {ai_assistant._get_language_instruction(language)}",
+                user_prompt=enhanced_prompt,
+                max_tokens=600
+            )
+            
+            ai_insights = generate_ai_insights_html(ai_text, get_text('ai_analysis'))
             
         except Exception as e:
-            ai_insights = f"""
-            <div style='background: white; color: red; padding: 20px; border: 2px solid red; margin: 10px 0; border-radius: 8px;'>
-            <h4 style='color: red;'>AI Debug Error</h4>
-            <p style='color: red;'>Error generating AI insights: {str(e)}</p>
-            </div>
-            """
+            ai_insights = generate_ai_insights_html(f"Error generating AI insights: {str(e)}")
     else:
-        ai_insights = """
-        <div style='background: white; color: blue; padding: 20px; border: 2px solid blue; margin: 10px 0; border-radius: 8px;'>
-        <h4 style='color: blue;'>AI Debug - Not Available</h4>
-        <p style='color: blue;'>AI analysis requires Claude API key. Set ANTHROPIC_API_KEY environment variable.</p>
-        </div>
-        """
+        ai_insights = generate_ai_insights_html("AI analysis requires Claude API key. Set ANTHROPIC_API_KEY environment variable.")
 
     return executive_snapshot(), ce, low, ai_insights
+
 
 def reorder_plan(budget=500.0, ui_language="English"):
     """Suggest what to reorder with a given budget with AI analysis."""
@@ -466,4 +481,104 @@ def free_up_cash(ui_language="English"):
 def reset_to_defaults():
     """Legacy function - now redirects to upload-only mode"""
     return reset_to_uploads()
+
+def analyze_executive_summary(ui_language="English"):
+    """Generate AI analysis specifically for executive summary"""
+    try:
+        tx, refunds, payouts = get_processed_data()
+        
+        if ai_assistant.is_available():
+            # Prepare comprehensive business context
+            transactions, refunds_df, payouts_df, products = get_current_data()
+            business_context = ai_assistant._prepare_business_context(tx, refunds_df, payouts_df, products)
+            
+            # Calculate key metrics for executive analysis
+            total_revenue = float(tx['line_total'].sum())
+            total_transactions = int(tx['transaction_id'].nunique())
+            avg_ticket = total_revenue / total_transactions if total_transactions > 0 else 0
+            total_refunds = float(refunds['refund_amount'].sum())
+            total_fees = float(payouts['processor_fees'].sum())
+            refund_rate = (total_refunds / total_revenue * 100) if total_revenue > 0 else 0
+            
+            language = get_language_from_ui_language(ui_language)
+            
+            executive_prompt = f"""
+            Provide an executive-level business analysis based on this data:
+
+            {business_context}
+
+            KEY METRICS:
+            - Total Revenue: €{total_revenue:,.2f}
+            - Average Ticket: €{avg_ticket:.2f}
+            - Total Transactions: {total_transactions:,}
+            - Refund Rate: {refund_rate:.1f}%
+            - Processing Costs: €{total_fees:,.2f}
+
+            Please provide analysis in this format:
+
+            1. **Business Health Overview** (2-3 sentences on overall performance)
+
+            2. **Key Opportunities** (Top 2-3 areas for improvement with specific impact)
+
+            3. **Priority Actions** (3 specific steps to take this week)
+
+            4. **Financial Outlook** (Assessment of cash flow health and trajectory)
+
+            Focus on actionable insights that an executive can act on immediately.
+            """
+            
+            ai_text = ai_assistant._make_claude_request(
+                system_prompt=f"You are a senior business consultant providing executive-level insights. {ai_assistant._get_language_instruction(language)}",
+                user_prompt=executive_prompt,
+                max_tokens=600
+            )
+            
+            return generate_ai_insights_html(ai_text, "Executive AI Analysis")
+        
+        else:
+            return generate_ai_insights_html("AI executive analysis requires Claude API key. Set ANTHROPIC_API_KEY environment variable.")
+    
+    except Exception as e:
+        return generate_ai_insights_html(f"Error generating executive analysis: {str(e)}")
+
+# Add the executive summary analysis to the existing functions
+def executive_snapshot():
+    """Return a multilingual HTML executive snapshot with optional AI analysis."""
+    try:
+        tx, refunds, payouts = get_processed_data()
+    except ValueError as e:
+        return f"""
+        <div style='color: red; padding: 15px; background-color: #f8d7da; border-radius: 5px;'>
+        <h3>⚠️ No Data Available</h3>
+        <p>{str(e)}</p>
+        <p><strong>Please upload all required CSV files:</strong></p>
+        <ul>
+            <li>Transactions CSV</li>
+            <li>Refunds CSV</li>
+            <li>Payouts CSV</li>
+            <li>Product Master CSV</li>
+        </ul>
+        </div>
+        """
+    
+    card_sales = float(tx.loc[tx["payment_type"] == "CARD", "line_total"].sum())
+    cash_sales = float(tx.loc[tx["payment_type"] == "CASH", "line_total"].sum())
+
+    html = f"""
+    <h3>{get_text('snapshot_title')} ({tx['day'].min()} → {tx['day'].max()})</h3>
+    <ul>
+      <li>{get_text('transactions')}: <b>{int(tx['transaction_id'].nunique())}</b></li>
+      <li>{get_text('items_sold')}: <b>{int(tx['quantity'].sum())}</b></li>
+      <li>{get_text('gross_sales')}: <b>€{float(tx['gross_sales'].sum()):,.2f}</b></li>
+      <li>{get_text('discounts')}: <b>€{float(tx['discount'].sum()):,.2f}</b></li>
+      <li>{get_text('tax_collected')}: <b>€{float(tx['tax'].sum()):,.2f}</b></li>
+      <li>{get_text('tips_collected')}: <b>€{float(tx['tip_amount'].sum()):,.2f}</b></li>
+      <li>{get_text('card_sales')}: <b>€{card_sales:,.2f}</b></li>
+      <li>{get_text('cash_sales')}: <b>€{cash_sales:,.2f}</b></li>
+      <li>{get_text('processor_fees')}: <b>€{float(payouts['processor_fees'].sum()):,.2f}</b></li>
+      <li>{get_text('refunds_processed')}: <b>€{float(refunds['refund_amount'].sum()):,.2f}</b></li>
+      <li>{get_text('net_card_payouts')}: <b>€{float(payouts['net_payout_amount'].sum()):,.2f}</b></li>
+    </ul>
+    """
+    return html
 
