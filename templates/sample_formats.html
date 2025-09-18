@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Format Guide - AI Cash Flow Assistant</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-10 mx-auto">
+                <div class="text-center mb-4">
+                    <h1><i class="fas fa-file-csv"></i> CSV Format Guide</h1>
+                    <p class="lead">Required column formats for your POS data files</p>
+                    <a href="/" class="btn btn-primary">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+
+                <!-- Transactions CSV -->
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h4><i class="fas fa-receipt"></i> 1. Transactions CSV</h4>
+                        <small>One row per line item (not per receipt)</small>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>date</th><th>transaction_id</th><th>product_id</th><th>product_name</th>
+                                        <th>category</th><th>quantity</th><th>unit_price</th><th>gross_sales</th>
+                                        <th>discount</th><th>net_sales</th><th>tax</th><th>line_total</th>
+                                        <th>payment_type</th><th>tip_amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>2025-01-08</td><td>2001</td><td>ESP</td><td>Espresso</td>
+                                        <td>Beverage</td><td>1</td><td>2.0</td><td>2.0</td>
+                                        <td>0.0</td><td>2.0</td><td>0.2</td><td>2.2</td>
+                                        <td>CARD</td><td>0.5</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Other CSV formats would go here... -->
+                <div class="alert alert-info">
+                    <h5><i class="fas fa-lightbulb"></i> Key Requirements</h5>
+                    <ul>
+                        <li><strong>Transactions:</strong> One row per line item (not per receipt)</li>
+                        <li><strong>Refunds:</strong> Link back via <code>original_transaction_id</code></li>
+                        <li><strong>Payouts:</strong> Daily card settlement data</li>
+                        <li><strong>Product Master:</strong> Include COGS for margin calculations</li>
+                    </ul>
+                    <p><strong>💡 Tip:</strong> Make sure your CSV files follow these exact column names and formats.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

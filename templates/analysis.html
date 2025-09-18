@@ -1,66 +1,119 @@
-
+<!-- templates/analysis.html -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Analysis Results - AI POS</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ question }} - AI Cash Flow Assistant</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        .ai-insights { 
-            background-color: #e8f5e8; 
-            padding: 15px; 
-            border-radius: 8px; 
-            margin: 15px 0; 
-            border-left: 4px solid #28a745;
+        @media (max-width: 768px) {
+            .container { padding: 10px !important; }
+            .table-responsive { font-size: 12px !important; }
+            h1 { font-size: 1.5rem !important; }
+        }
+        
+        .ai-insights {
+            background: linear-gradient(135deg, #e8f5e8 0%, #f0f8f0 100%);
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 5px solid #28a745;
+            margin: 20px 0;
+        }
+        
+        .analysis-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 0;
+            margin-bottom: 30px;
+            border-radius: 10px;
+        }
+        
+        .table-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin: 20px 0;
+            overflow: hidden;
+        }
+        
+        .budget-message {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #2196F3;
         }
     </style>
 </head>
 <body>
     <div class="container mt-4">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>📊 Analysis: {{ question }}</h1>
-            <a href="/" class="btn btn-secondary">← Back</a>
+        <!-- Analysis Header -->
+        <div class="analysis-header text-center">
+            <h1><i class="fas fa-chart-bar"></i> {{ question }}</h1>
+            <div class="mt-3">
+                <a href="/" class="btn btn-outline-light">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+                <button class="btn btn-outline-light ms-2" onclick="window.print()">
+                    <i class="fas fa-print"></i> Print Report
+                </button>
+            </div>
         </div>
         
-        <!-- Snapshot -->
+        <!-- Executive Snapshot -->
         <div class="card mb-4">
-            <div class="card-header"><h4>📈 Executive Snapshot</h4></div>
+            <div class="card-header bg-primary text-white">
+                <h4><i class="fas fa-tachometer-alt"></i> Executive Snapshot</h4>
+            </div>
             <div class="card-body">
                 {{ snapshot | safe }}
             </div>
         </div>
         
-        <!-- Cash Eaters Table -->
-        {% if cash_eaters_table %}
-        <div class="card mb-4">
-            <div class="card-header"><h4>💸 Cash Drains</h4></div>
-            <div class="card-body">
-                {{ cash_eaters_table | safe }}
-            </div>
+        <!-- Budget Message -->
+        {% if budget_message %}
+        <div class="budget-message">
+            <h5><i class="fas fa-euro-sign"></i> Budget Analysis</h5>
+            <p class="mb-0">{{ budget_message }}</p>
         </div>
         {% endif %}
         
-        <!-- Low Margin Table -->
-        {% if low_margin_table %}
-        <div class="card mb-4">
-            <div class="card-header"><h4>📉 Lowest Margin Products</h4></div>
-            <div class="card-body">
-                {{ low_margin_table | safe }}
-            </div>
+        <!-- Main Analysis Table -->
+        {% if main_table %}
+        <div class="table-container">
+            {{ main_table | safe }}
+        </div>
+        {% endif %}
+        
+        <!-- Secondary Table -->
+        {% if secondary_table %}
+        <div class="table-container">
+            {{ secondary_table | safe }}
         </div>
         {% endif %}
         
         <!-- AI Insights -->
         {% if ai_insights %}
         <div class="ai-insights">
+            <h4><i class="fas fa-robot"></i> AI Analysis</h4>
             {{ ai_insights | safe }}
         </div>
         {% endif %}
         
-        <div class="mt-4">
-            <a href="/" class="btn btn-primary">Run Another Analysis</a>
+        <!-- Action Buttons -->
+        <div class="text-center mt-4 mb-5">
+            <a href="/" class="btn btn-primary btn-lg me-3">
+                <i class="fas fa-chart-line"></i> Run Another Analysis
+            </a>
+            <a href="/clear_data" class="btn btn-outline-danger" 
+               onclick="return confirm('Clear all data? This will require re-uploading CSV files.')">
+                <i class="fas fa-trash"></i> Clear Data
+            </a>
         </div>
     </div>
-    
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

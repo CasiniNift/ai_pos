@@ -1,0 +1,618 @@
+<!-- templates/dashboard.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI POS – Cash Flow Assistant</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Mobile-first responsive design matching app.py */
+        @media (max-width: 768px) {
+            .container { padding: 10px !important; }
+            .card { margin-bottom: 15px !important; }
+            .btn { min-height: 44px !important; font-size: 16px !important; }
+            h1 { font-size: 1.5rem !important; }
+            h3 { font-size: 1.2rem !important; }
+        }
+        
+        .upload-area { 
+            background-color: #f8f9fa; 
+            padding: 20px; 
+            border-radius: 10px; 
+            border: 2px dashed #dee2e6;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-area:hover { 
+            border-color: #007bff; 
+            background-color: #f0f8ff;
+        }
+        
+        .status-success { 
+            background-color: #d4edda; 
+            border: 1px solid #c3e6cb; 
+            color: #155724; 
+            padding: 15px; 
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        
+        .ai-status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        
+        .ai-active { background-color: #d4edda; color: #155724; }
+        .ai-inactive { background-color: #f8d7da; color: #721c24; }
+        
+        .question-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        
+        .question-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .data-status-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .data-status-item:last-child {
+            border-bottom: none;
+        }
+        
+        .snapshot-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+        }
+        
+        .snapshot-card h4 {
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <!-- Header matching app.py -->
+        <div class="text-center mb-4">
+            <h1 class="display-4">☕ AI POS – Cash Flow Assistant</h1>
+            <p class="lead">Upload your POS CSV data or connect via API to get AI-powered cash flow insights</p>
+        </div>
+
+        <!-- AI Status Indicator -->
+        <div class="ai-status {{ 'ai-active' if ai_available else 'ai-inactive' }}">
+            {% if ai_available %}
+                <i class="fas fa-robot"></i> <strong>Claude AI:</strong> Active - Advanced insights enabled
+            {% else %}
+                <i class="fas fa-robot"></i> <strong>Claude AI:</strong> Inactive - Set ANTHROPIC_API_KEY for advanced insights
+            {% endif %}
+        </div>
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' if category == 'error' else 'warning' }} alert-dismissible fade show" role="alert">
+                        <pre style="white-space: pre-wrap; margin: 0; font-family: inherit;">{{ message }}</pre>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="row">
+            <!-- LEFT COLUMN: Data Connection (matching app.py layout) -->
+            <div class="col-md-5">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h3><i class="fas fa-plug"></i> Data Connection</h3>
+                        <small class="text-muted">Choose how to connect your POS data</small>
+                    </div>
+                    <div class="card-body">
+                        <!-- Tabs for CSV Upload vs API Connection -->
+                        <ul class="nav nav-tabs mb-3" id="connectionTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="csv-tab" data-bs-toggle="tab" data-bs-target="#csv-upload" type="button" role="tab">
+                                    <i class="fas fa-upload"></i> CSV Upload
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="api-tab" data-bs-toggle="tab" data-bs-target="#api-connection" type="button" role="tab">
+                                    <i class="fas fa-plug"></i> API Connection
+                                </button>
+                            </li>
+                        </ul>
+
+                        <!-- Tab Content -->
+                        <div class="tab-content" id="connectionTabContent">
+                            <!-- CSV Upload Tab -->
+                            <div class="tab-pane fade show active" id="csv-upload" role="tabpanel">
+                                <div class="upload-area">
+                                    <form method="POST" action="/upload" enctype="multipart/form-data">
+                                        <h5><i class="fas fa-upload"></i> CSV Upload</h5>
+                                        <p class="text-muted mb-3">Upload all 4 CSV files to enable analysis:</p>
+                                        
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label for="transactions" class="form-label">
+                                                    <i class="fas fa-receipt"></i> 1️⃣ Transactions CSV
+                                                </label>
+                                                <input type="file" class="form-control" name="transactions" accept=".csv" required>
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label for="refunds" class="form-label">
+                                                    <i class="fas fa-undo"></i> 2️⃣ Refunds CSV
+                                                </label>
+                                                <input type="file" class="form-control" name="refunds" accept=".csv" required>
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label for="payouts" class="form-label">
+                                                    <i class="fas fa-credit-card"></i> 3️⃣ Payouts CSV
+                                                </label>
+                                                <input type="file" class="form-control" name="payouts" accept=".csv" required>
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label for="products" class="form-label">
+                                                    <i class="fas fa-box"></i> 4️⃣ Product Master CSV
+                                                </label>
+                                                <input type="file" class="form-control" name="products" accept=".csv" required>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="d-grid">
+                                            <button type="submit" class="btn btn-primary btn-lg">
+                                                <i class="fas fa-cloud-upload-alt"></i> Upload & Process Data
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <!-- API Connection Tab -->
+                            <div class="tab-pane fade" id="api-connection" role="tabpanel">
+                                <div class="api-connection-area p-3" style="background-color: #f8f9fa; border-radius: 10px;">
+                                    <form id="apiConnectionForm">
+                                        <h5><i class="fas fa-plug"></i> Connect to your POS system</h5>
+                                        <p class="text-muted mb-3">Connect directly to fetch your transaction data automatically</p>
+
+                                        <!-- POS Provider Selection -->
+                                        <div class="mb-3">
+                                            <label for="posProvider" class="form-label">
+                                                <i class="fas fa-store"></i> POS Provider
+                                            </label>
+                                            <select class="form-select" id="posProvider" name="provider" required>
+                                                <option value="">Select your POS system...</option>
+                                                <option value="Square">Square</option>
+                                                <option value="SumUp">SumUp</option>
+                                                <option value="Shopify">Shopify</option>
+                                                <option value="Stripe">Stripe</option>
+                                                <option value="PayPal">PayPal</option>
+                                                <option value="Toast">Toast</option>
+                                                <option value="Lightspeed">Lightspeed</option>
+                                                <option value="Revel">Revel</option>
+                                                <option value="TouchBistro">TouchBistro</option>
+                                                <option value="Other">Other/Custom</option>
+                                            </select>
+                                            <div class="form-text">Select your Point-of-Sale system provider</div>
+                                        </div>
+
+                                        <!-- API Key -->
+                                        <div class="mb-3">
+                                            <label for="apiKey" class="form-label">
+                                                <i class="fas fa-key"></i> API Key
+                                            </label>
+                                            <div class="input-group">
+                                                <input type="password" class="form-control" id="apiKey" name="api_key" 
+                                                       placeholder="Paste your API key here..." required>
+                                                <button class="btn btn-outline-secondary" type="button" id="toggleApiKey">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                            </div>
+                                            <div class="form-text">Your API key is encrypted and stored securely</div>
+                                        </div>
+
+                                        <!-- Custom Endpoint (for Other/Custom) -->
+                                        <div class="mb-3" id="customEndpointGroup" style="display: none;">
+                                            <label for="customEndpoint" class="form-label">
+                                                <i class="fas fa-link"></i> API Endpoint
+                                            </label>
+                                            <input type="url" class="form-control" id="customEndpoint" name="endpoint" 
+                                                   placeholder="https://api.your-pos-system.com">
+                                            <div class="form-text">Only needed for custom/other POS systems</div>
+                                        </div>
+
+                                        <!-- Date Range -->
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <label for="startDate" class="form-label">
+                                                    <i class="fas fa-calendar-alt"></i> Start Date
+                                                </label>
+                                                <input type="date" class="form-control" id="startDate" name="start_date" required>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="endDate" class="form-label">
+                                                    <i class="fas fa-calendar-alt"></i> End Date
+                                                </label>
+                                                <input type="date" class="form-control" id="endDate" name="end_date" required>
+                                            </div>
+                                        </div>
+
+                                        <!-- Action Buttons -->
+                                        <div class="row">
+                                            <div class="col-md-6 mb-2">
+                                                <button type="button" class="btn btn-outline-info w-100" id="testConnectionBtn">
+                                                    <i class="fas fa-plug"></i> Test Connection
+                                                </button>
+                                            </div>
+                                            <div class="col-md-6 mb-2">
+                                                <button type="submit" class="btn btn-success w-100">
+                                                    <i class="fas fa-download"></i> Connect & Fetch Data
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- API Result Area -->
+                                        <div id="apiResult" class="mt-3" style="display: none;">
+                                            <div class="alert" id="apiResultContent"></div>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="row">
+                            <div class="col-6">
+                                <a href="/sample_formats" class="btn btn-outline-info w-100">
+                                    <i class="fas fa-info-circle"></i> CSV Format Guide
+                                </a>
+                            </div>
+                            <div class="col-6">
+                                <a href="/clear_data" class="btn btn-outline-danger w-100" 
+                                   onclick="return confirm('Clear all data? This cannot be undone.')">
+                                    <i class="fas fa-trash"></i> Clear Data
+                                </a>
+                            </div>
+                        </div>
+                        
+                        <!-- Data Status -->
+                        <div class="mt-4">
+                            <h5><i class="fas fa-chart-bar"></i> Current Data Status</h5>
+                            <div class="data-status">
+                                {% for name, status in data_status.items() %}
+                                    <div class="data-status-item d-flex justify-content-between align-items-center">
+                                        <span>{{ name }}:</span>
+                                        <span class="{{ 'text-success' if '✅' in status else 'text-danger' }}">
+                                            {{ status }}
+                                        </span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- RIGHT COLUMN: Analysis & Results -->
+            <div class="col-md-7">
+                <!-- Executive Snapshot -->
+                {% if has_data %}
+                <div class="card snapshot-card mb-4">
+                    <div class="card-body">
+                        {{ snapshot_html | safe }}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Analysis Questions -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-robot"></i> Ask the Assistant</h3>
+                        <small class="text-muted">{{ 'Select a question to analyze your data' if has_data else 'Upload data first to enable analysis' }}</small>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <!-- Question Cards -->
+                            <div class="col-md-6 mb-3">
+                                <div class="card question-card {{ '' if has_data else 'opacity-50' }}" 
+                                     data-action="cash_flow" 
+                                     data-has-data="{{ 'true' if has_data else 'false' }}">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-chart-line fa-2x text-danger mb-2"></i>
+                                        <h5>What's eating my cash flow?</h5>
+                                        <p class="text-muted small">Identify discounts, refunds, and fees draining your cash</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <div class="card question-card {{ '' if has_data else 'opacity-50' }}" 
+                                     data-action="reorder" 
+                                     data-has-data="{{ 'true' if has_data else 'false' }}">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-shopping-cart fa-2x text-success mb-2"></i>
+                                        <h5>What should I reorder?</h5>
+                                        <p class="text-muted small">Get purchase recommendations within your budget</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <div class="card question-card {{ '' if has_data else 'opacity-50' }}" 
+                                     data-action="free_cash" 
+                                     data-has-data="{{ 'true' if has_data else 'false' }}">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-coins fa-2x text-warning mb-2"></i>
+                                        <h5>How much cash can I free up?</h5>
+                                        <p class="text-muted small">Estimate cash from clearing slow-moving inventory</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <div class="card question-card {{ '' if has_data else 'opacity-50' }}" 
+                                     data-action="summary" 
+                                     data-has-data="{{ 'true' if has_data else 'false' }}">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-chart-pie fa-2x text-info mb-2"></i>
+                                        <h5>Executive Summary</h5>
+                                        <p class="text-muted small">High-level business performance overview</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {% if not has_data %}
+                        <div class="alert alert-info text-center">
+                            <i class="fas fa-info-circle"></i> 
+                            Upload all 4 CSV files to unlock AI-powered analysis
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Budget Modal -->
+    <div class="modal fade" id="budgetModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Set Your Budget</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="budgetForm">
+                        <div class="mb-3">
+                            <label for="budget" class="form-label">Budget Amount (€)</label>
+                            <input type="number" class="form-control" id="budget" min="50" max="50000" value="500" step="50">
+                        </div>
+                        <div class="mb-3">
+                            <label for="language" class="form-label">AI Language</label>
+                            <select class="form-select" id="language">
+                                <option value="English">English</option>
+                                <option value="Italiano">Italiano</option>
+                                <option value="Español">Español</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="runReorderAnalysis()">
+                        <i class="fas fa-chart-bar"></i> Run Analysis
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function showDataAlert() {
+            alert('Please upload all 4 CSV files first to enable analysis.');
+        }
+
+        function showBudgetModal() {
+            new bootstrap.Modal(document.getElementById('budgetModal')).show();
+        }
+
+        function runReorderAnalysis() {
+            const budget = document.getElementById('budget').value;
+            const language = document.getElementById('language').value;
+            window.location.href = `/analyze/reorder?budget=${budget}&language=${language}`;
+        }
+
+        // Handle question card clicks
+        document.addEventListener('DOMContentLoaded', function() {
+            // Question cards event handling
+            const questionCards = document.querySelectorAll('.question-card');
+            
+            questionCards.forEach(card => {
+                card.addEventListener('click', function() {
+                    const action = this.dataset.action;
+                    const hasData = this.dataset.hasData === 'true';
+                    
+                    if (!hasData) {
+                        showDataAlert();
+                        return;
+                    }
+                    
+                    // Handle different actions
+                    switch(action) {
+                        case 'cash_flow':
+                            window.location.href = '/analyze/cash_flow';
+                            break;
+                        case 'reorder':
+                            showBudgetModal();
+                            break;
+                        case 'free_cash':
+                            window.location.href = '/analyze/free_cash';
+                            break;
+                        case 'summary':
+                            window.location.href = '/analyze/summary';
+                            break;
+                        default:
+                            console.log('Unknown action:', action);
+                    }
+                });
+            });
+
+            // API Connection functionality
+            setupApiConnection();
+
+            // Set default dates
+            const today = new Date();
+            const lastWeek = new Date();
+            lastWeek.setDate(today.getDate() - 7);
+            
+            document.getElementById('startDate').value = lastWeek.toISOString().split('T')[0];
+            document.getElementById('endDate').value = today.toISOString().split('T')[0];
+        });
+
+        function setupApiConnection() {
+            const posProviderSelect = document.getElementById('posProvider');
+            const customEndpointGroup = document.getElementById('customEndpointGroup');
+            const toggleApiKeyBtn = document.getElementById('toggleApiKey');
+            const apiKeyInput = document.getElementById('apiKey');
+            const testConnectionBtn = document.getElementById('testConnectionBtn');
+            const apiConnectionForm = document.getElementById('apiConnectionForm');
+
+            // Show/hide custom endpoint based on provider
+            posProviderSelect.addEventListener('change', function() {
+                if (this.value === 'Other') {
+                    customEndpointGroup.style.display = 'block';
+                } else {
+                    customEndpointGroup.style.display = 'none';
+                }
+            });
+
+            // Toggle API key visibility
+            toggleApiKeyBtn.addEventListener('click', function() {
+                const type = apiKeyInput.type === 'password' ? 'text' : 'password';
+                apiKeyInput.type = type;
+                
+                const icon = this.querySelector('i');
+                icon.className = type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
+            });
+
+            // Test connection
+            testConnectionBtn.addEventListener('click', async function() {
+                const formData = new FormData(apiConnectionForm);
+                const data = Object.fromEntries(formData);
+                
+                if (!data.provider || !data.api_key) {
+                    showApiResult('Please select a POS provider and enter your API key.', 'warning');
+                    return;
+                }
+
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+
+                try {
+                    const response = await fetch('/api/test_connection', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    });
+
+                    const result = await response.json();
+                    
+                    if (response.ok) {
+                        showApiResult(result.message, result.success ? 'success' : 'danger');
+                    } else {
+                        showApiResult(result.error || 'Connection test failed', 'danger');
+                    }
+                } catch (error) {
+                    showApiResult(`Network error: ${error.message}`, 'danger');
+                } finally {
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fas fa-plug"></i> Test Connection';
+                }
+            });
+
+            // API connection form submission
+            apiConnectionForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this);
+                const data = Object.fromEntries(formData);
+
+                if (!data.provider || !data.api_key || !data.start_date || !data.end_date) {
+                    showApiResult('Please fill in all required fields.', 'warning');
+                    return;
+                }
+
+                const submitBtn = this.querySelector('button[type="submit"]');
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+
+                try {
+                    const response = await fetch('/api/connect', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    });
+
+                    const result = await response.json();
+                    
+                    if (response.ok) {
+                        showApiResult(result.message, 'success');
+                        // Refresh the page after successful connection
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        showApiResult(result.error || 'Connection failed', 'danger');
+                    }
+                } catch (error) {
+                    showApiResult(`Network error: ${error.message}`, 'danger');
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-download"></i> Connect & Fetch Data';
+                }
+            });
+        }
+
+        function showApiResult(message, type) {
+            const resultDiv = document.getElementById('apiResult');
+            const contentDiv = document.getElementById('apiResultContent');
+            
+            contentDiv.className = `alert alert-${type}`;
+            contentDiv.innerHTML = message;
+            resultDiv.style.display = 'block';
+            
+            // Auto-hide after 5 seconds for non-success messages
+            if (type !== 'success') {
+                setTimeout(() => {
+                    resultDiv.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        // Auto-refresh data status every 30 seconds
+        setInterval(async () => {
+            try {
+                const response = await fetch('/api/status');
+                const status = await response.json();
+                console.log('Status updated:', status);
+            } catch (error) {
+                console.log('Status update failed:', error);
+            }
+        }, 30000);
+    </script>
+</body>
+</html>

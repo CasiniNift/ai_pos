@@ -1,40 +1,100 @@
-# flask_app.py - Simple Flask version to bypass Gradio issues
+# flask_app.py - Enhanced Flask version matching app.py structure and functionality
 
-from flask import Flask, render_template, request, jsonify, flash, redirect, url_for
+from flask import Flask, render_template, request, jsonify, flash, redirect, url_for, session
 import pandas as pd
 import sys
 import os
 from werkzeug.utils import secure_filename
 import traceback
+import uuid
+from datetime import datetime
 
 # Add src to path
 sys.path.append('src')
 
 try:
-    from analysis import cash_eaters, executive_snapshot, set_data, get_data_status
-    from utils import load_csv_from_uploads, validate_schema_or_raise, DEFAULT_SCHEMAS
+    from analysis import (
+        cash_eaters, reorder_plan, free_up_cash, executive_snapshot, 
+        set_data, reset_to_uploads, get_data_status
+    )
+    from utils import (
+        load_csv_from_uploads, persist_uploads_to_data_dir,
+        validate_schema_or_raise, DEFAULT_SCHEMAS
+    )
+    from ai_assistant import CashFlowAIAssistant
 except ImportError as e:
     print(f"Import error: {e}")
     print("Make sure you're running this from the project root directory")
     sys.exit(1)
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'  # Change this in production
+app.secret_key = 'ai-pos-cash-flow-secret-key-change-in-production'  # Change in production
 app.config['UPLOAD_FOLDER'] = 'temp_uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB max file size
 
 # Create upload directory
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+# Initialize AI assistant
+ai_assistant = CashFlowAIAssistant()
+
+def format_df_as_html(df, title=None):
+    """Format DataFrame as HTML table with responsive design"""
+    if df is None or df.empty:
+        return ""
+    
+    heading = f"<h4 class='mb-3'>{title}</h4>" if title else ""
+    table_html = df.to_html(
+        index=False, 
+        classes="table table-striped table-responsive table-hover",
+        table_id=f"table-{title.lower().replace(' ', '-')}" if title else "data-table"
+    )
+    
+    return f"""
+    <div class="table-container mb-4">
+        {heading}
+        <div class="table-responsive">
+            {table_html}
+        </div>
+    </div>
+    """
+
+def clean_currency_display(value):
+    """Clean and format currency values for display"""
+    if pd.isna(value):
+        return "€0.00"
+    try:
+        return f"€{float(value):,.2f}"
+    except (ValueError, TypeError):
+        return "€0.00"
+
 @app.route('/')
 def index():
-    """Main page"""
+    """Main dashboard page matching app.py layout"""
     data_status = get_data_status()
-    return render_template('index.html', data_status=data_status)
+    
+    # Check if we have a session and data loaded
+    has_data = all('✅' in status for status in data_status.values())
+    
+    # Get executive snapshot if data is loaded
+    snapshot_html = ""
+    if has_data:
+        try:
+            snapshot_html = executive_snapshot()
+        except:
+            snapshot_html = "<p class='text-muted'>Upload data to see executive snapshot</p>"
+    else:
+        snapshot_html = "<p class='text-muted'>Upload all 4 CSV files to see your business snapshot</p>"
+    
+    return render_template('dashboard.html', 
+                         data_status=data_status,
+                         has_data=has_data,
+                         snapshot_html=snapshot_html,
+                         ai_available=ai_assistant.is_available())
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
-    """Handle file uploads"""
+    """Handle file uploads - matching app.py functionality"""
     try:
         files = {}
         file_mapping = {
@@ -44,36 +104,52 @@ def upload_files():
             'products': 'pm'
         }
         
-        # Save uploaded files
+        # Save uploaded files temporarily
+        temp_files = {}
         for form_name, key in file_mapping.items():
             if form_name in request.files:
                 file = request.files[form_name]
                 if file and file.filename and file.filename.endswith('.csv'):
-                    filename = secure_filename(file.filename)
+                    filename = f"{uuid.uuid4()}_{secure_filename(file.filename)}"
                     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                     file.save(filepath)
-                    files[key] = filepath
+                    temp_files[key] = filepath
         
-        if not files:
-            flash('No valid CSV files uploaded', 'error')
+        if not temp_files:
+            flash('Please upload at least one CSV file', 'warning')
             return redirect(url_for('index'))
         
-        # Process files
-        dfs = {}
-        for key, filepath in files.items():
-            df = pd.read_csv(filepath)
-            # Clean up any unnamed columns
-            unnamed_cols = [col for col in df.columns if 'Unnamed:' in str(col)]
-            if unnamed_cols:
-                df = df.drop(columns=unnamed_cols)
-            dfs[key] = df
+        # Load and validate CSV files
+        dfs = load_csv_from_uploads(
+            temp_files.get('tx'), 
+            temp_files.get('rf'), 
+            temp_files.get('po'), 
+            temp_files.get('pm')
+        )
+        
+        if not dfs:
+            flash('No valid CSV files found. Please check your files and try again.', 'error')
+            return redirect(url_for('index'))
+        
+        # Check for required files
+        required_files = {"tx": "Transactions", "rf": "Refunds", "po": "Payouts", "pm": "Product Master"}
+        missing_files = [desc for key, desc in required_files.items() if key not in dfs]
+        
+        if missing_files:
+            flash(f'Missing required files: {", ".join(missing_files)}. Please upload all CSV files.', 'warning')
+            return redirect(url_for('index'))
         
         # Validate schemas
         for key, df in dfs.items():
             if key in DEFAULT_SCHEMAS:
-                validate_schema_or_raise(key, df, DEFAULT_SCHEMAS[key])
+                try:
+                    validate_schema_or_raise(key, df, DEFAULT_SCHEMAS[key])
+                except Exception as e:
+                    flash(f'Schema validation failed for {required_files.get(key, key)}: {str(e)}', 'error')
+                    return redirect(url_for('index'))
         
-        # Set data in analysis module
+        # Persist to data directory and set in analysis module
+        persist_uploads_to_data_dir(dfs)
         set_data(
             transactions=dfs.get("tx"),
             refunds=dfs.get("rf"),
@@ -82,236 +158,349 @@ def upload_files():
         )
         
         # Clean up temp files
-        for filepath in files.values():
+        for filepath in temp_files.values():
             if os.path.exists(filepath):
                 os.remove(filepath)
         
-        flash('Data uploaded successfully!', 'success')
+        # Build success message
+        file_counts = [f"✅ {required_files[key]}: {len(df):,} rows" for key, df in dfs.items()]
+        flash(f'Data uploaded successfully!\n\n{chr(10).join(file_counts)}\n\nYou can now run analysis questions!', 'success')
         
     except Exception as e:
-        flash(f'Error processing files: {str(e)}', 'error')
         # Clean up temp files on error
-        for filepath in files.values():
+        for filepath in temp_files.values():
             if os.path.exists(filepath):
                 os.remove(filepath)
+        flash(f'Error processing files: {str(e)}', 'error')
+        print(f"Upload error: {traceback.format_exc()}")
     
     return redirect(url_for('index'))
 
-@app.route('/analyze')
-def analyze():
-    """Run cash flow analysis"""
+@app.route('/analyze/<question>')
+def analyze(question):
+    """Run analysis - matching all app.py questions"""
     try:
-        question = request.args.get('question', 'What\'s eating my cash flow?')
+        budget = float(request.args.get('budget', 500))
+        language = request.args.get('language', 'English')
         
-        if question == "What's eating my cash flow?":
-            snap, ce, low, ai_insights = cash_eaters()
+        # Map question to analysis function
+        if question == "cash_flow":
+            snap, ce, low, ai_insights = cash_eaters(ui_language=language)
             
-            # Convert DataFrames to HTML tables
-            ce_html = ce.to_html(classes='table table-striped', index=False) if ce is not None and not ce.empty else "No data"
-            low_html = low.to_html(classes='table table-striped', index=False) if low is not None and not low.empty else "No data"
-            
-            return render_template('analysis.html', 
-                                 question=question,
+            return render_template('analysis.html',
+                                 question="What's eating my cash flow?",
                                  snapshot=snap,
-                                 cash_eaters_table=ce_html,
-                                 low_margin_table=low_html,
-                                 ai_insights=ai_insights)
+                                 main_table=format_df_as_html(ce, "💸 Cash Drains"),
+                                 secondary_table=format_df_as_html(low, "📉 Lowest Margin Products"),
+                                 ai_insights=ai_insights,
+                                 show_budget_form=False)
+        
+        elif question == "reorder":
+            snap, msg, plan, ai_insights = reorder_plan(budget, ui_language=language)
+            
+            return render_template('analysis.html',
+                                 question="What should I reorder with budget?",
+                                 snapshot=snap,
+                                 budget_message=msg,
+                                 main_table=format_df_as_html(plan, "🛒 Suggested Purchase Plan"),
+                                 secondary_table="",
+                                 ai_insights=ai_insights,
+                                 show_budget_form=True,
+                                 current_budget=budget)
+        
+        elif question == "free_cash":
+            snap, msg, slow, ai_insights = free_up_cash(ui_language=language)
+            
+            return render_template('analysis.html',
+                                 question="How much cash can I free up?",
+                                 snapshot=snap,
+                                 budget_message=msg,
+                                 main_table=format_df_as_html(slow, "🐌 Slow-Moving Inventory"),
+                                 secondary_table="",
+                                 ai_insights=ai_insights,
+                                 show_budget_form=False)
+        
         else:
-            # For other questions, just show executive snapshot for now
+            # Default to executive summary
             snap = executive_snapshot()
-            return render_template('analysis.html', 
-                                 question=question,
+            return render_template('analysis.html',
+                                 question="Executive Summary",
                                  snapshot=snap,
-                                 cash_eaters_table="",
-                                 low_margin_table="",
-                                 ai_insights="Other analysis questions coming soon!")
+                                 main_table="",
+                                 secondary_table="",
+                                 ai_insights="",
+                                 show_budget_form=False)
             
     except Exception as e:
         error_msg = f"Analysis error: {str(e)}"
-        return render_template('analysis.html', 
+        print(f"Analysis error: {traceback.format_exc()}")
+        
+        return render_template('analysis.html',
                              question="Error",
-                             snapshot=error_msg,
-                             cash_eaters_table="",
-                             low_margin_table="",
-                             ai_insights="")
+                             snapshot=f"<div class='alert alert-danger'>{error_msg}</div>",
+                             main_table="",
+                             secondary_table="",
+                             ai_insights="Please ensure you've uploaded all required CSV files first.",
+                             show_budget_form=False)
 
-@app.route('/status')
-def status():
-    """Get current data status"""
-    data_status = get_data_status()
-    return jsonify(data_status)
+@app.route('/clear_data')
+def clear_data():
+    """Clear all data"""
+    try:
+        reset_to_uploads()
+        flash('All data cleared. Please upload fresh CSV files.', 'info')
+    except Exception as e:
+        flash(f'Error clearing data: {str(e)}', 'error')
+    
+    return redirect(url_for('index'))
 
-# HTML Templates
-index_template = '''
-<!DOCTYPE html>
-<html>
-<head>
-    <title>AI POS - Cash Flow Assistant</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .upload-area { 
-            border: 2px dashed #dee2e6; 
-            border-radius: 8px; 
-            padding: 20px; 
-            margin: 10px 0; 
-            background-color: #f8f9fa;
-        }
-        .status-success { color: #28a745; }
-        .status-error { color: #dc3545; }
-    </style>
-</head>
-<body>
-    <div class="container mt-4">
-        <h1 class="mb-4">☕ AI POS - Cash Flow Assistant</h1>
+@app.route('/api/test_connection', methods=['POST'])
+def test_api_connection():
+    """Test API connection without fetching data"""
+    try:
+        data = request.get_json()
+        provider = data.get('provider')
+        api_key = data.get('api_key')
+        endpoint = data.get('endpoint')
         
-        <!-- Flash messages -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+        if not provider or not api_key:
+            return jsonify({'error': 'Provider and API key are required'}), 400
         
-        <div class="row">
-            <div class="col-md-6">
-                <h3>📁 Upload CSV Files</h3>
-                <div class="upload-area">
-                    <form method="POST" action="/upload" enctype="multipart/form-data">
-                        <div class="mb-3">
-                            <label for="transactions" class="form-label">📊 Transactions CSV</label>
-                            <input type="file" class="form-control" name="transactions" accept=".csv">
-                        </div>
-                        <div class="mb-3">
-                            <label for="refunds" class="form-label">↩️ Refunds CSV</label>
-                            <input type="file" class="form-control" name="refunds" accept=".csv">
-                        </div>
-                        <div class="mb-3">
-                            <label for="payouts" class="form-label">💳 Payouts CSV</label>
-                            <input type="file" class="form-control" name="payouts" accept=".csv">
-                        </div>
-                        <div class="mb-3">
-                            <label for="products" class="form-label">📦 Products CSV</label>
-                            <input type="file" class="form-control" name="products" accept=".csv">
-                        </div>
-                        <button type="submit" class="btn btn-primary">📤 Upload & Process</button>
-                    </form>
-                </div>
-            </div>
-            
-            <div class="col-md-6">
-                <h3>📊 Current Data Status</h3>
-                <ul class="list-group">
-                    {% for name, status in data_status.items() %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            {{ name }}
-                            <span class="{{ 'status-success' if '✅' in status else 'status-error' }}">
-                                {{ status }}
-                            </span>
-                        </li>
-                    {% endfor %}
-                </ul>
+        # Handle different POS providers
+        if provider == "Square":
+            try:
+                from square_api import SquareAPIConnector
+                connector = SquareAPIConnector(api_key, environment="sandbox")
+                success, message = connector.test_connection()
                 
-                <h3 class="mt-4">🤖 Analysis</h3>
-                <div class="d-grid gap-2">
-                    <a href="/analyze?question=What's eating my cash flow?" class="btn btn-success">
-                        🚀 What's eating my cash flow?
-                    </a>
-                    <a href="/analyze?question=Executive Summary" class="btn btn-outline-secondary">
-                        📈 Executive Summary
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
+                return jsonify({
+                    'success': success,
+                    'message': f"Square API Test: {message}",
+                    'provider': provider
+                })
+                
+            except ImportError:
+                return jsonify({
+                    'success': False,
+                    'message': 'Square API connector not available. Please ensure square_api.py is installed.'
+                })
+        
+        elif provider == "Stripe":
+            try:
+                from stripe_api import StripeAPIConnector
+                connector = StripeAPIConnector(api_key)
+                success, message = connector.test_connection()
+                
+                return jsonify({
+                    'success': success,
+                    'message': f"Stripe API Test: {message}",
+                    'provider': provider
+                })
+                
+            except ImportError:
+                return jsonify({
+                    'success': False,
+                    'message': 'Stripe API connector not available. Please ensure stripe_api.py is installed.'
+                })
+        
+        elif provider == "SumUp":
+            try:
+                from sumup_api import SumUpAPIConnector
+                connector = SumUpAPIConnector(api_key, environment="sandbox")
+                success, message = connector.test_connection()
+                
+                return jsonify({
+                    'success': success,
+                    'message': f"SumUp API Test: {message}",
+                    'provider': provider
+                })
+                
+            except ImportError:
+                return jsonify({
+                    'success': False,
+                    'message': 'SumUp API connector not available. Please ensure sumup_api.py is installed.'
+                })
+        
+        elif provider == "Shopify":
+            try:
+                from shopify_api import ShopifyAPIConnector
+                # For Shopify, we'd need the shop name - using demo for testing
+                shop_name = "demo-store"  # In production, this would be a separate field
+                connector = ShopifyAPIConnector(shop_name, api_key)
+                success, message = connector.test_connection()
+                
+                return jsonify({
+                    'success': success,
+                    'message': f"Shopify API Test: {message}",
+                    'provider': provider
+                })
+                
+            except ImportError:
+                return jsonify({
+                    'success': False,
+                    'message': 'Shopify API connector not available. Please ensure shopify_api.py is installed.'
+                })
+        
+        else:
+            # For other providers, return a placeholder response
+            return jsonify({
+                'success': False,
+                'message': f"{provider} integration is planned but not yet implemented. Currently available: Square, Stripe, SumUp, Shopify",
+                'provider': provider
+            })
     
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
-'''
+    except Exception as e:
+        return jsonify({'error': f'Connection test failed: {str(e)}'}), 500
 
-analysis_template = '''
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Analysis Results - AI POS</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .ai-insights { 
-            background-color: #e8f5e8; 
-            padding: 15px; 
-            border-radius: 8px; 
-            margin: 15px 0; 
-            border-left: 4px solid #28a745;
-        }
-    </style>
-</head>
-<body>
-    <div class="container mt-4">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>📊 Analysis: {{ question }}</h1>
-            <a href="/" class="btn btn-secondary">← Back</a>
-        </div>
+@app.route('/api/connect', methods=['POST'])
+def connect_api():
+    """Connect to API and fetch data"""
+    try:
+        data = request.get_json()
+        provider = data.get('provider')
+        api_key = data.get('api_key')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        endpoint = data.get('endpoint')
         
-        <!-- Snapshot -->
-        <div class="card mb-4">
-            <div class="card-header"><h4>📈 Executive Snapshot</h4></div>
-            <div class="card-body">
-                {{ snapshot | safe }}
-            </div>
-        </div>
+        if not all([provider, api_key, start_date, end_date]):
+            return jsonify({'error': 'All fields are required'}), 400
         
-        <!-- Cash Eaters Table -->
-        {% if cash_eaters_table %}
-        <div class="card mb-4">
-            <div class="card-header"><h4>💸 Cash Drains</h4></div>
-            <div class="card-body">
-                {{ cash_eaters_table | safe }}
-            </div>
-        </div>
-        {% endif %}
+        # Handle different POS providers
+        if provider == "Square":
+            try:
+                from square_api import SquareAPIConnector
+                
+                connector = SquareAPIConnector(api_key, environment="sandbox")
+                success, test_message = connector.test_connection()
+                if not success:
+                    return jsonify({'error': f'Connection failed: {test_message}'}), 400
+                
+                # Generate mock data for demonstration
+                mock_data = connector.generate_mock_data(start_date, end_date)
+                
+                # Set data in analysis module
+                set_data(
+                    transactions=mock_data["transactions"],
+                    refunds=mock_data["refunds"],
+                    payouts=mock_data["payouts"],
+                    products=mock_data["products"]
+                )
+                
+                return jsonify({
+                    'success': True,
+                    'message': f"""🎉 Square connection successful!
+                    
+Provider: {provider}
+Environment: Sandbox
+Date Range: {start_date} to {end_date}
+Connection: {test_message}
+
+Data Retrieved:
+✅ Transactions: {len(mock_data["transactions"]):,} rows
+✅ Products: {len(mock_data["products"])} items  
+✅ Refunds: {len(mock_data["refunds"])} refunds
+✅ Payouts: {len(mock_data["payouts"])} settlements
+
+You can now run analysis questions!""",
+                    'provider': provider,
+                    'data_count': {
+                        'transactions': len(mock_data["transactions"]),
+                        'refunds': len(mock_data["refunds"]),
+                        'payouts': len(mock_data["payouts"]),
+                        'products': len(mock_data["products"])
+                    }
+                })
+                
+            except ImportError:
+                return jsonify({'error': 'Square API connector not available'}), 500
         
-        <!-- Low Margin Table -->
-        {% if low_margin_table %}
-        <div class="card mb-4">
-            <div class="card-header"><h4>📉 Lowest Margin Products</h4></div>
-            <div class="card-body">
-                {{ low_margin_table | safe }}
-            </div>
-        </div>
-        {% endif %}
+        elif provider == "Stripe":
+            try:
+                from stripe_api import StripeAPIConnector
+                
+                connector = StripeAPIConnector(api_key)
+                success, test_message = connector.test_connection()
+                if not success:
+                    return jsonify({'error': f'Connection failed: {test_message}'}), 400
+                
+                # Generate mock data for demonstration
+                mock_data = connector.generate_mock_data(start_date, end_date)
+                
+                # Set data in analysis module
+                set_data(
+                    transactions=mock_data["transactions"],
+                    refunds=mock_data["refunds"],
+                    payouts=mock_data["payouts"],
+                    products=mock_data["products"]
+                )
+                
+                return jsonify({
+                    'success': True,
+                    'message': f"""🎉 Stripe connection successful!
+                    
+Provider: {provider}
+Environment: {connector.environment.title()}
+Date Range: {start_date} to {end_date}
+Connection: {test_message}
+
+Data Retrieved:
+✅ Transactions: {len(mock_data["transactions"]):,} rows
+✅ Products: {len(mock_data["products"])} items  
+✅ Refunds: {len(mock_data["refunds"])} refunds
+✅ Payouts: {len(mock_data["payouts"])} settlements
+
+Business Type: Digital services & subscriptions
+You can now run analysis questions!""",
+                    'provider': provider
+                })
+                
+            except ImportError:
+                return jsonify({'error': 'Stripe API connector not available'}), 500
         
-        <!-- AI Insights -->
-        {% if ai_insights %}
-        <div class="ai-insights">
-            {{ ai_insights | safe }}
-        </div>
-        {% endif %}
-        
-        <div class="mt-4">
-            <a href="/" class="btn btn-primary">Run Another Analysis</a>
-        </div>
-    </div>
+        else:
+            return jsonify({
+                'error': f'{provider} integration is not yet implemented. Currently available: Square, Stripe'
+            }), 400
     
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
-'''
+    except Exception as e:
+        return jsonify({'error': f'Connection failed: {str(e)}'}), 500
 
-# Create templates directory and save templates
-templates_dir = 'templates'
-os.makedirs(templates_dir, exist_ok=True)
+@app.route('/api/status')
+def api_status():
+    """API endpoint for data status - for AJAX updates"""
+    return jsonify(get_data_status())
 
-with open(f'{templates_dir}/index.html', 'w') as f:
-    f.write(index_template)
+@app.route('/sample_formats')
+def sample_formats():
+    """Show CSV format examples"""
+    return render_template('sample_formats.html')
 
-with open(f'{templates_dir}/analysis.html', 'w') as f:
-    f.write(analysis_template)
+# Error handlers
+@app.errorhandler(413)
+def too_large(e):
+    flash('File too large. Maximum size is 32MB.', 'error')
+    return redirect(url_for('index'))
+
+@app.errorhandler(500)
+def internal_error(error):
+    flash('An internal error occurred. Please try again.', 'error')
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    print("Starting Flask Cash Flow App...")
-    print("Open your browser to: http://127.0.0.1:5000")
+    print("🚀 Starting AI Cash Flow Assistant (Flask)")
+    print("=" * 50)
+    print("📊 Professional cash flow analysis for coffee shops & restaurants")
+    print("🤖 AI-powered insights with Claude integration")
+    print("📱 Mobile-friendly interface")
+    print("🌐 Open your browser to: http://127.0.0.1:5000")
+    print("=" * 50)
+    
+    # Check for AI availability
+    if ai_assistant.is_available():
+        print("✅ Claude AI integration: ACTIVE")
+    else:
+        print("⚠️  Claude AI integration: INACTIVE (set ANTHROPIC_API_KEY)")
+    
+    print("\nStarting Flask server...")
     app.run(debug=True, host='127.0.0.1', port=5000)
