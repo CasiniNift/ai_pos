@@ -1,5 +1,5 @@
 # flask_app.py - Enhanced Flask version matching app.py structure and functionality
-
+from flask import session
 from flask import Flask, render_template, request, jsonify, flash, redirect, url_for, session
 import pandas as pd
 import sys
@@ -34,6 +34,29 @@ app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB max file size
 
 # Create upload directory
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# Add language handling function to flask_app.py
+def get_current_language():
+    """Get current language from session or default to English"""
+    return session.get('language', 'English')
+
+def set_language(language):
+    """Set language in session"""
+    session['language'] = language
+
+# Add language route to flask_app.py
+@app.route('/set_language/<language>')
+def set_language_route(language):
+    """Set the interface language"""
+    valid_languages = ['English', 'Italiano']
+    if language in valid_languages:
+        session['language'] = language
+        flash(f'Language changed to {language}', 'success')
+    else:
+        flash('Invalid language selected', 'error')
+    
+    # Redirect back to the page they came from
+    return redirect(request.referrer or url_for('index'))
 
 # Initialize AI assistant
 ai_assistant = CashFlowAIAssistant()
@@ -72,6 +95,8 @@ def clean_currency_display(value):
 def index():
     """Main dashboard page matching app.py layout"""
     data_status = get_data_status()
+    current_language = get_current_language()
+    
     
     # Check if we have a session and data loaded
     has_data = all('✅' in status for status in data_status.values())
@@ -90,7 +115,8 @@ def index():
                          data_status=data_status,
                          has_data=has_data,
                          snapshot_html=snapshot_html,
-                         ai_available=ai_assistant.is_available())
+                         ai_available=ai_assistant.is_available(),
+                         current_language=current_language)
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
@@ -176,14 +202,14 @@ def upload_files():
     
     return redirect(url_for('index'))
 
-@app.route('/analyze/<question>')
 def analyze(question):
     """Run analysis - matching all app.py questions"""
     try:
         budget = float(request.args.get('budget', 500))
-        language = request.args.get('language', 'English')
+        # Get language from session instead of request args
+        language = get_current_language()
         
-        # Map question to analysis function
+        # Rest of your analyze function stays the same...
         if question == "cash_flow":
             snap, ce, low, ai_insights = cash_eaters(ui_language=language)
             
@@ -193,7 +219,8 @@ def analyze(question):
                                  main_table=format_df_as_html(ce, "💸 Cash Drains"),
                                  secondary_table=format_df_as_html(low, "📉 Lowest Margin Products"),
                                  ai_insights=ai_insights,
-                                 show_budget_form=False)
+                                 show_budget_form=False,
+                                 current_language=current_language)
         
         elif question == "reorder":
             snap, msg, plan, ai_insights = reorder_plan(budget, ui_language=language)
@@ -206,11 +233,12 @@ def analyze(question):
                                  secondary_table="",
                                  ai_insights=ai_insights,
                                  show_budget_form=True,
-                                 current_budget=budget)
+                                 current_budget=budget,
+                                 current_language=current_language)
         
         elif question == "free_cash":
-            snap, msg, slow, ai_insights = free_up_cash(ui_language=language)
-            
+            snap, msg, slow, ai_insights = free_up_cash(ui_language=current_language)
+
             return render_template('analysis.html',
                                  question="How much cash can I free up?",
                                  snapshot=snap,
@@ -218,7 +246,8 @@ def analyze(question):
                                  main_table=format_df_as_html(slow, "🐌 Slow-Moving Inventory"),
                                  secondary_table="",
                                  ai_insights=ai_insights,
-                                 show_budget_form=False) 
+                                 show_budget_form=False,
+                                 current_language=current_language)
         
         else:
             # Executive summary with AI analysis
@@ -231,23 +260,26 @@ def analyze(question):
                 ai_insights = f"<div class='alert alert-warning'>Error generating executive analysis: {str(e)}</div>"
             
             return render_template('analysis.html',
-                                question="Executive Summary",
-                                snapshot=snap,
-                                main_table="",
-                                secondary_table="",
-                                ai_insights=ai_insights,
-                                show_budget_form=False)
+                                 question="Executive Summary",
+                                 snapshot=snap,
+                                 main_table="",
+                                 secondary_table="",
+                                 ai_insights=ai_insights,
+                                 show_budget_form=False,
+                                 current_language=current_language)
+            
     except Exception as e:
-        error_msg=f"Analysis error: {str(e)}"
-        print(f"{error_msg}\n{traceback.format_exc()}")
-
+        error_msg = f"Analysis error: {str(e)}"
+        print(f"Analysis error: {traceback.format_exc()}")
+        
         return render_template('analysis.html',
-                                question="Error",
-                                snapshot=f"<div class='alert alert-danger'>{error_msg}</div>",
-                                main_table="",
-                                secondary_table="",
-                                ai_insights="Please ensure you've uploaded all required CSV files first.",
-                                show_budget_form=False)
+                             question="Error",
+                             snapshot=f"<div class='alert alert-danger'>{error_msg}</div>",
+                             main_table="",
+                             secondary_table="",
+                             ai_insights="Please ensure you've uploaded all required CSV files first.",
+                             show_budget_form=False,
+                             current_language=get_current_language())
 
 @app.route('/clear_data')
 def clear_data():
