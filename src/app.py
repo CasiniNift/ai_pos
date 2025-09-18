@@ -393,9 +393,150 @@ def show_current_data_status():
 # ---------- UI Layout ----------
 
 with gr.Blocks(title="AI POS – Cash Flow Assistant (Upload-Only)", css="""
-    .ai-toggle { background-color: #e8f5e8; padding: 10px; border-radius: 5px; }
-    .upload-area { background-color: #f8f9fa; padding: 15px; border-radius: 8px; border: 2px dashed #dee2e6; }
-    .status-box { background-color: #e3f2fd; padding: 10px; border-radius: 5px; margin: 10px 0; }
+    /* Mobile-first responsive design */
+    @media (max-width: 768px) {
+        .gradio-container {
+            padding: 5px !important;
+            margin: 0 !important;
+        }
+        
+        /* Stack columns vertically on mobile */
+        .row {
+            flex-direction: column !important;
+        }
+        
+        /* Mobile-friendly spacing */
+        .block, .gr-group {
+            margin: 10px 0 !important;
+            padding: 10px !important;
+        }
+        
+        /* Touch-friendly buttons (44px minimum for iOS) */
+        .gr-button {
+            min-height: 44px !important;
+            font-size: 16px !important;
+            padding: 12px 16px !important;
+            margin: 8px 0 !important;
+            width: 100% !important;
+        }
+        
+        /* Prevent iOS zoom on input focus */
+        input, select, textarea, .gr-textbox input, .gr-dropdown select {
+            font-size: 16px !important;
+            min-height: 44px !important;
+            padding: 12px !important;
+        }
+        
+        /* Better file upload on mobile */
+        .gr-file {
+            min-height: 60px !important;
+        }
+        
+        /* Responsive tables */
+        table {
+            font-size: 12px !important;
+            overflow-x: auto !important;
+            display: block !important;
+            white-space: nowrap !important;
+            width: 100% !important;
+        }
+        
+        /* Compact headers */
+        h1 { font-size: 1.5em !important; margin: 15px 0 10px 0 !important; }
+        h2 { font-size: 1.3em !important; margin: 12px 0 8px 0 !important; }
+        h3 { font-size: 1.2em !important; margin: 10px 0 6px 0 !important; }
+        h4 { font-size: 1.1em !important; margin: 8px 0 4px 0 !important; }
+        
+        /* Better markdown spacing */
+        .gr-markdown {
+            margin: 8px 0 !important;
+            padding: 8px !important;
+        }
+        
+        /* Tabs optimization */
+        .gr-tabs {
+            margin: 5px 0 !important;
+        }
+        
+        .gr-tab {
+            padding: 8px 12px !important;
+            font-size: 14px !important;
+        }
+        
+        /* Code blocks for mobile */
+        .gr-code {
+            font-size: 11px !important;
+            overflow-x: auto !important;
+        }
+        
+        /* Results section */
+        .gr-html {
+            overflow-x: auto !important;
+        }
+        
+        /* Hide less important elements on very small screens */
+        @media (max-width: 480px) {
+            .status-box {
+                padding: 8px !important;
+                margin: 5px 0 !important;
+            }
+            
+            /* Smaller text for very small screens */
+            body, .gr-textbox input {
+                font-size: 14px !important;
+            }
+        }
+    }
+
+    /* Tablet optimization */
+    @media (min-width: 769px) and (max-width: 1024px) {
+        .gradio-container {
+            padding: 15px !important;
+        }
+        
+        .gr-button {
+            min-height: 40px !important;
+            font-size: 15px !important;
+        }
+    }
+
+    /* Desktop and existing styles */
+    .ai-toggle { 
+        background-color: #e8f5e8; 
+        padding: 10px; 
+        border-radius: 5px; 
+    }
+    
+    .upload-area { 
+        background-color: #f8f9fa; 
+        padding: 15px; 
+        border-radius: 8px; 
+        border: 2px dashed #dee2e6; 
+    }
+    
+    .status-box { 
+        background-color: #e3f2fd; 
+        padding: 10px; 
+        border-radius: 5px; 
+        margin: 10px 0; 
+    }
+    
+    /* Better table styling for all screen sizes */
+    table {
+        border-collapse: collapse;
+        width: 100%;
+    }
+    
+    table th, table td {
+        padding: 8px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    table th {
+        background-color: #f8f9fa;
+        font-weight: bold;
+    }
 """) as app:
     gr.Markdown("# AI POS – Cash Flow Assistant")
     gr.Markdown("**Upload your POS CSV data or connect via API to get AI-powered cash flow insights.**")
@@ -629,5 +770,9 @@ SNW,Sandwich,Food,2.00,6.50""")
         return run_action_html(q, b, ai_lang)
     run_btn.click(_route, inputs=[action, budget, ai_lang_selector], outputs=[result_html])
 
+# ---------- Launch App from multiple devices in your local network ----------
 if __name__ == "__main__":
-    app.launch(share=False, inbrowser=True)
+    app.launch(
+        share=True,  # This creates a public URL
+        inbrowser=True
+    )
