@@ -466,3 +466,4 @@ def free_up_cash(ui_language="English"):
 def reset_to_defaults():
     """Legacy function - now redirects to upload-only mode"""
     return reset_to_uploads()
+

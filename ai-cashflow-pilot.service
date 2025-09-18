@@ -1,0 +1,15 @@
+[Unit]
+Description=AI Cash Flow Assistant - Pilot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/ai_pos
+Environment=PATH=/home/ubuntu/ai_pos/venv/bin
+ExecStart=/home/ubuntu/ai_pos/venv/bin/python src/app_pilot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,5 +1,6 @@
-# src/app_mobile.py - Mobile-optimized version with better layout matching app.py
+# src/app_mobile_minimal.py - Start with working app.py and add minimal mobile fixes
 
+# Copy the EXACT working app.py imports and functions
 import gradio as gr
 import pandas as pd
 from analysis import (
@@ -11,102 +12,14 @@ from utils import (
     validate_schema_or_raise, DEFAULT_SCHEMAS
 )
 
-# ---------- Mobile-Optimized Helper Functions ----------
-
-def format_ai_response(text):
-    """Format AI response text with proper HTML structure - convert markdown to HTML with mobile-friendly formatting"""
-    if not text:
-        return "<p>No analysis available.</p>"
-    
-    # First, convert all **text** markdown to HTML bold tags
-    import re
-    text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
-    
-    # Split into paragraphs and format
-    paragraphs = text.split('\n\n')
-    formatted_paragraphs = []
-    
-    for para in paragraphs:
-        para = para.strip()
-        if not para:
-            continue
-            
-        # Check if it's a numbered list item
-        if para.startswith(('1. ', '2. ', '3. ', '4. ', '5. ')):
-            # Extract number and content
-            parts = para.split('. ', 1)
-            if len(parts) == 2:
-                number = parts[0]
-                content = parts[1]
-                
-                # Check if there's a header (look for <strong> tags or colon)
-                if '<strong>' in content and '</strong>' in content:
-                    # Format: 1. <strong>Header</strong> content
-                    formatted_paragraphs.append(f'<div style="margin: 15px 0; word-wrap: break-word; overflow-wrap: break-word;"><strong style="color: #2d5016; font-size: 16px;">{number}.</strong> {content}</div>')
-                elif ': ' in content:
-                    # Format: 1. Header: content
-                    header_part = content.split(': ')[0].strip()
-                    remaining_content = content.split(': ', 1)[1].strip()
-                    formatted_paragraphs.append(f'<div style="margin: 15px 0; word-wrap: break-word; overflow-wrap: break-word;"><strong style="color: #2d5016; font-size: 16px;">{number}. {header_part}:</strong></div>')
-                    if remaining_content:
-                        formatted_paragraphs.append(f'<div style="margin: 10px 0; padding-left: 20px; line-height: 1.5; word-wrap: break-word; overflow-wrap: break-word;">{remaining_content}</div>')
-                else:
-                    # No clear header, just format as regular numbered item
-                    formatted_paragraphs.append(f'<div style="margin: 15px 0; word-wrap: break-word; overflow-wrap: break-word;"><strong style="color: #2d5016; font-size: 16px;">{number}.</strong> {content}</div>')
-            else:
-                formatted_paragraphs.append(f'<div style="margin: 10px 0; line-height: 1.5; word-wrap: break-word; overflow-wrap: break-word;">{para}</div>')
-        
-        # Regular paragraph
-        else:
-            formatted_paragraphs.append(f'<div style="margin: 10px 0; line-height: 1.5; word-wrap: break-word; overflow-wrap: break-word;">{para}</div>')
-    
-    return '\n'.join(formatted_paragraphs)
-
-def generate_ai_insights_html(ai_text, title="AI Analysis"):
-    """Wrap AI text in consistent HTML formatting with proper paragraph breaks and mobile-friendly layout"""
-    if not ai_text or "Error" in ai_text:
-        return f"""
-        <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; margin: 10px 0; word-wrap: break-word; overflow-wrap: break-word; max-width: 100%; box-sizing: border-box;">
-        <h4 style="margin-bottom: 10px; color: #856404; word-wrap: break-word;">🤖 {title}</h4>
-        <p style="line-height: 1.5; margin: 0; word-wrap: break-word; overflow-wrap: break-word;">{ai_text or 'AI analysis not available. Please check your API key configuration.'}</p>
-        </div>
-        """
-    
-    # Format the AI text with proper paragraph breaks and structure
-    formatted_text = format_ai_response(ai_text)
-    
-    return f"""
-    <div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; margin: 10px 0; word-wrap: break-word; overflow-wrap: break-word; max-width: 100%; box-sizing: border-box; overflow-x: hidden;">
-    <h4 style="margin-bottom: 15px; color: #2d5016; font-size: 18px; font-weight: bold; word-wrap: break-word;">🤖 {title}</h4>
-    <div style="color: #2d5016; font-size: 14px; line-height: 1.6; word-wrap: break-word; overflow-wrap: break-word;">
-    {formatted_text}
-    </div>
-    </div>
-    """
+# ---------- Helpers (EXACT copy from working app.py) ----------
 
 def _df_html(df, title=None):
-    """Render a DataFrame as HTML with mobile-friendly formatting (same as app.py but with mobile optimizations)"""
+    """Render a DataFrame as HTML (or return empty string if None/empty)."""
     if df is None or getattr(df, "empty", True):
         return ""
-    
-    heading = f"<h4 style='word-wrap: break-word; margin: 15px 0;'>{title}</h4>" if title else ""
-    
-    # Create mobile-friendly table
-    table_html = df.to_html(
-        index=False, 
-        border=0, 
-        classes="table", 
-        justify="left"
-    )
-    
-    return f"""
-    <div style="margin: 15px 0; word-wrap: break-word; overflow-wrap: break-word; max-width: 100%; box-sizing: border-box;">
-        {heading}
-        <div style="overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch;">
-            {table_html}
-        </div>
-    </div>
-    """
+    heading = f"<h4>{title}</h4>" if title else ""
+    return heading + df.to_html(index=False, border=0, classes="table", justify="left")
 
 def _reload_data_from_uploads(tx_u, rf_u, po_u, pm_u):
     """Load DataFrames from uploaded files or return empty dict if none provided."""
@@ -164,46 +77,28 @@ def run_action_html(action, budget, ai_lang):
             html = snap
             html += _df_html(ce, "Cash Eaters (Discounts / Refunds / Fees)")
             html += _df_html(low, "Lowest-Margin SKUs")
-            # Extract AI text and format properly
-            if isinstance(ai_insights, str) and ai_insights.startswith('<div'):
-                import re
-                ai_text = re.sub(r'<[^>]+>', '', ai_insights).strip()
-            else:
-                ai_text = ai_insights
-            html += generate_ai_insights_html(ai_text, "AI Analysis")
+            html += ai_insights
             return html
 
         elif action == "What should I reorder with budget?":
             snap, msg, plan, ai_insights = reorder_plan(float(budget or 500), ui_language=ai_lang)
             html = snap + f"<p><b>{msg}</b></p>"
             html += _df_html(plan, "Suggested Purchase Plan")
-            # Extract AI text
-            if isinstance(ai_insights, str) and ai_insights.startswith('<div'):
-                import re
-                ai_text = re.sub(r'<[^>]+>', '', ai_insights).strip()
-            else:
-                ai_text = ai_insights
-            html += generate_ai_insights_html(ai_text, "AI Analysis")
+            html += ai_insights
             return html
 
         elif action == "How much cash can I free up?":
             snap, msg, slow, ai_insights = free_up_cash(ui_language=ai_lang)
             html = snap + f"<p><b>{msg}</b></p>"
             html += _df_html(slow, "Slow-Mover Clearance Estimate")
-            # Extract AI text
-            if isinstance(ai_insights, str) and ai_insights.startswith('<div'):
-                import re
-                ai_text = re.sub(r'<[^>]+>', '', ai_insights).strip()
-            else:
-                ai_text = ai_insights
-            html += generate_ai_insights_html(ai_text, "AI Analysis")
+            html += ai_insights
             return html
 
         else:
             return executive_snapshot()
             
     except Exception as e:
-        return f"<div style='color: red; padding: 15px; background-color: #f8d7da; border-radius: 5px; word-wrap: break-word;'>Error: {str(e)}</div>"
+        return f"<div style='color: red; padding: 15px; background-color: #f8d7da; border-radius: 5px;'>Error: {str(e)}</div>"
 
 def show_current_data_status():
     """Show what data is currently loaded"""
@@ -216,60 +111,35 @@ def show_current_data_status():
     
     return html
 
-# ---------- UI Layout (Same as app.py but with mobile optimizations) ----------
+# ---------- UI Layout (Same as working app.py with ONLY mobile CSS added) ----------
 
-with gr.Blocks(
-    title="AI POS – Cash Flow Assistant", 
-    css="""
-    /* Mobile-first responsive design with app.py layout preservation */
+with gr.Blocks(title="AI POS – Cash Flow Assistant (Mobile)", css="""
+    /* ONLY add mobile text wrapping - keep everything else the same */
     @media (max-width: 768px) {
         .gradio-container {
             padding: 10px !important;
         }
         
-        /* Stack columns on mobile */
-        .row {
-            flex-direction: column !important;
-        }
-        
-        /* Mobile-friendly buttons */
         .gr-button {
             min-height: 44px !important;
             font-size: 16px !important;
-            padding: 12px !important;
-            width: 100% !important;
         }
         
-        /* Prevent zoom on iOS */
         input, select, textarea {
             font-size: 16px !important;
             min-height: 44px !important;
         }
     }
     
-    /* Global mobile text wrapping fixes */
-    .gradio-container {
-        max-width: 100% !important;
-        margin: 0 !important;
-        overflow-x: hidden !important;
-    }
-    
-    .gr-html, .gradio-html {
+    /* Essential text wrapping fixes */
+    .gr-html {
         word-wrap: break-word !important;
         overflow-wrap: break-word !important;
         max-width: 100% !important;
         overflow-x: hidden !important;
-        white-space: normal !important;
     }
     
-    .gr-html *, .gradio-html * {
-        max-width: 100% !important;
-        box-sizing: border-box !important;
-        word-wrap: break-word !important;
-        overflow-wrap: break-word !important;
-    }
-    
-    /* Preserve app.py styling */
+    /* Keep original app.py styles */
     .ai-toggle { 
         background-color: #e8f5e8; 
         padding: 10px; 
@@ -288,36 +158,20 @@ with gr.Blocks(
         padding: 10px; 
         border-radius: 5px; 
         margin: 10px 0; 
-        word-wrap: break-word;
-        overflow-wrap: break-word;
     }
+""") as app:
     
-    /* Mobile-responsive tables */
-    .gr-html table, .gradio-html table {
-        width: 100% !important;
-        font-size: 12px !important;
-        word-wrap: break-word !important;
-    }
-    
-    .gr-html td, .gr-html th {
-        word-wrap: break-word !important;
-        padding: 4px !important;
-    }
-    """
-) as app:
-    
-    # Header (same as app.py)
-    gr.Markdown("# AI POS – Cash Flow Assistant")
+    gr.Markdown("# AI POS – Cash Flow Assistant (Mobile)")
     gr.Markdown("**Upload your POS CSV data or connect via API to get AI-powered cash flow insights.**")
 
     with gr.Row():
-        # LEFT: Data inputs (same structure as app.py)
+        # LEFT: Data inputs (EXACT same as app.py)
         with gr.Column(scale=1):
             with gr.Group():
                 gr.Markdown("### 🔌 Data Connection")
                 gr.Markdown("Choose how to connect your POS data:")
                 
-                # Data source tabs (same as app.py but simplified for mobile)
+                # Simplified for mobile - just CSV upload tab
                 with gr.Tabs():
                     with gr.TabItem("📁 CSV Upload", id="csv_tab"):
                         gr.Markdown("**Upload CSV files manually**")
@@ -358,7 +212,7 @@ with gr.Blocks(
                     apply_msg = gr.HTML()
                     data_status = gr.HTML(show_current_data_status())
 
-        # RIGHT: Questions + Results (same as app.py)
+        # RIGHT: Questions + Results (EXACT same as app.py)
         with gr.Column(scale=2):
             with gr.Group():
                 gr.Markdown("### 🤖 Ask the Assistant")
@@ -386,7 +240,7 @@ with gr.Blocks(
 
             result_html = gr.HTML(label="Results")
 
-    # ========== EVENT HANDLERS (Same as app.py) ==========
+    # ========== EVENT HANDLERS (EXACT copy from app.py) ==========
     
     # Budget visibility handler
     def _toggle_budget(q):
@@ -417,10 +271,10 @@ with gr.Blocks(
         return run_action_html(q, b, ai_lang)
     run_btn.click(_route, inputs=[action, budget, ai_lang_selector], outputs=[result_html])
 
-# ---------- Launch with public URL for mobile testing ----------
+# ---------- Launch with public URL ----------
 if __name__ == "__main__":
     app.launch(
-        share=True,  # ✅ This creates the public gradio.live URL like app.py!
+        share=True,  # Creates public URL
         inbrowser=True,
-        server_port=7861  # Use different port to avoid conflicts
+        server_port=7862  # Different port
     )
