@@ -486,6 +486,114 @@ with gr.Blocks(title="AI POS – Cash Flow Assistant (Upload-Only)", css="""
                 font-size: 14px !important;
             }
         }
+        /* Better dropdown handling on mobile */
+        .gr-dropdown {
+            position: relative !important;
+            z-index: 1000 !important;
+        }
+
+        .gr-dropdown select {
+            appearance: none !important;
+            -webkit-appearance: none !important;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5'><path fill='%23666' d='M2 0L0 2h4zm0 5L0 3h4z'/></svg>") !important;
+            background-repeat: no-repeat !important;
+            background-position: right 12px center !important;
+            background-size: 12px !important;
+            padding-right: 40px !important;
+        }
+
+        /* Better touch targets for iOS */
+        select, input[type="text"], input[type="password"], input[type="number"] {
+            -webkit-appearance: none !important;
+            border-radius: 8px !important;
+            border: 2px solid #ddd !important;
+        }
+
+        select:focus, input:focus {
+            border-color: #007AFF !important;
+            outline: none !important;
+        }
+
+        /* Prevent zoom on iOS when focusing inputs */
+        @supports (-webkit-touch-callout: none) {
+            input, select, textarea {
+                font-size: 16px !important;
+                transform: scale(1) !important;
+            }
+        }
+
+        /* Better viewport handling for mobile keyboards */
+        .gradio-container {
+            min-height: 100vh !important;
+            overflow-x: hidden !important;
+        }
+
+        /* AI Analysis text fixes - more aggressive */
+        .gr-html {
+        background-color: white !important;
+        color: #000000 !important;
+        padding: 15px !important;
+        border: 2px solid #ddd !important;
+        border-radius: 8px !important;
+        margin: 10px 0 !important;
+        line-height: 1.6 !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui !important;
+        overflow-wrap: break-word !important;
+        word-wrap: break-word !important;
+        }
+
+        /* Force all text in results to be visible */
+        .gr-html p, .gr-html div, .gr-html span, .gr-html strong, .gr-html h1, .gr-html h2, .gr-html h3, .gr-html h4 {
+            color: #000000 !important;
+            background-color: transparent !important;
+            font-size: 14px !important;
+            margin: 8px 0 !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+        }
+
+        /* Specific styling for headings */
+        .gr-html h4 {
+            color: #2c3e50 !important;
+            font-size: 16px !important;
+            font-weight: bold !important;
+            margin: 15px 0 8px 0 !important;
+        }
+
+        /* Remove any background that might hide text */
+        .gr-html * {
+            background: none !important;
+            text-shadow: none !important;
+        }
+    
+        /* Ensure AI insights section has proper styling */
+        .gr-html p {
+            color: #333 !important;
+            margin: 10px 0 !important;
+            font-size: 14px !important;
+        }
+    
+        /* Make sure headings in AI analysis are visible */
+        .gr-html h4 {
+            color: #2c3e50 !important;
+            font-size: 16px !important;
+            font-weight: bold !important;
+            margin: 15px 0 10px 0 !important;
+        }
+    
+        /* AI insights container styling */
+        .gr-html div {
+            background-color: #f8f9fa !important;
+            padding: 12px !important;
+            border-radius: 6px !important;
+            margin: 8px 0 !important;
+        }
+        
+        /* Ensure all text elements are visible */
+        .gr-html * {
+            color: inherit !important;
+            opacity: 1 !important;
+        }
     }
 
     /* Tablet optimization */

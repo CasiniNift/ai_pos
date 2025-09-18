@@ -317,13 +317,32 @@ def cash_eaters(ui_language="English"):
             # Get AI analysis
             language = get_language_from_ui_language(ui_language)
             ai_text = ai_assistant.analyze_cash_eaters(business_context, cash_eaters_data, language)
-            ai_insights = generate_ai_insights_html(ai_text, get_text('ai_analysis'))
+            
+            # Debug version with visible styling
+            ai_insights = f"""
+            <div style='background: white; color: black; padding: 20px; border: 2px solid green; margin: 10px 0; border-radius: 8px;'>
+            <h4 style='color: black; margin: 10px 0;'>🤖 AI Analysis</h4>
+            <div style='color: black; font-size: 14px; line-height: 1.5;'>
+            {ai_text}
+            </div>
+            </div>
+            """
             
         except Exception as e:
-            ai_insights = generate_ai_insights_html(f"Error generating AI insights: {str(e)}")
+            ai_insights = f"""
+            <div style='background: white; color: red; padding: 20px; border: 2px solid red; margin: 10px 0; border-radius: 8px;'>
+            <h4 style='color: red;'>AI Debug Error</h4>
+            <p style='color: red;'>Error generating AI insights: {str(e)}</p>
+            </div>
+            """
     else:
-        ai_insights = generate_ai_insights_html("AI analysis requires Claude API key. Set ANTHROPIC_API_KEY environment variable.")
-    
+        ai_insights = """
+        <div style='background: white; color: blue; padding: 20px; border: 2px solid blue; margin: 10px 0; border-radius: 8px;'>
+        <h4 style='color: blue;'>AI Debug - Not Available</h4>
+        <p style='color: blue;'>AI analysis requires Claude API key. Set ANTHROPIC_API_KEY environment variable.</p>
+        </div>
+        """
+
     return executive_snapshot(), ce, low, ai_insights
 
 def reorder_plan(budget=500.0, ui_language="English"):
