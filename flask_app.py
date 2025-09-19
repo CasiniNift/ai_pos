@@ -202,6 +202,7 @@ def upload_files():
     
     return redirect(url_for('index'))
 
+@app.route('/analyze/<question>')
 def analyze(question):
     """Run analysis - matching all app.py questions"""
     try:

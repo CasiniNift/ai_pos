@@ -10,11 +10,11 @@ import os
 import sys
 
 # Get language from command line argument or environment
-CURRENT_LANGUAGE = 'en'
-if len(sys.argv) > 1:
-    lang_arg = sys.argv[1].lower()
-    if lang_arg in ['en', 'it', 'es']:
-        CURRENT_LANGUAGE = lang_arg
+#CURRENT_LANGUAGE = 'en'
+#if len(sys.argv) > 1:
+    #lang_arg = sys.argv[1].lower()
+    #if lang_arg in ['en', 'it', 'es']:
+        #CURRENT_LANGUAGE = lang_arg
 
 # Initialize AI Assistant
 ai_assistant = CashFlowAIAssistant()
@@ -581,4 +581,3 @@ def executive_snapshot():
     </ul>
     """
     return html
-
