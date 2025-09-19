@@ -8,6 +8,9 @@ from werkzeug.utils import secure_filename
 import traceback
 import uuid
 from datetime import datetime
+import threading
+import time
+
 
 # Add src to path
 sys.path.append('src')
@@ -34,6 +37,7 @@ app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB max file size
 
 # Create upload directory
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
 
 # Add language handling function to flask_app.py
 def get_current_language():
@@ -532,7 +536,7 @@ if __name__ == '__main__':
     print("📊 Professional cash flow analysis for coffee shops & restaurants")
     print("🤖 AI-powered insights with Claude integration")
     print("📱 Mobile-friendly interface")
-    print("🌐 Open your browser to: http://127.0.0.1:5000")
+    print("🌐 Local URL: http://127.0.0.1:8000")
     print("=" * 50)
     
     # Check for AI availability
@@ -541,5 +545,9 @@ if __name__ == '__main__':
     else:
         print("⚠️  Claude AI integration: INACTIVE (set ANTHROPIC_API_KEY)")
     
-    print("\nStarting Flask server...")
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    print("\n🌐 Flask app is ready!")
+    print("💡 Open http://127.0.0.1:8000 in your browser")
+    print("📱 For mobile testing, use your local IP address")
+    
+    # Start Flask server (accessible from local network)
+    app.run(debug=True, host='0.0.0.0', port=8000)
