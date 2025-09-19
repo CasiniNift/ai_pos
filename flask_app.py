@@ -1,16 +1,12 @@
-# flask_app.py - Enhanced Flask version matching app.py structure and functionality
-from flask import session
-from flask import Flask, render_template, request, jsonify, flash, redirect, url_for, session
+# flask_app.py - Simplified version without language session complexity
+
+from flask import Flask, render_template, request, jsonify, flash, redirect, url_for
 import pandas as pd
 import sys
 import os
 from werkzeug.utils import secure_filename
 import traceback
 import uuid
-from datetime import datetime
-import threading
-import time
-
 
 # Add src to path
 sys.path.append('src')
@@ -31,36 +27,12 @@ except ImportError as e:
     sys.exit(1)
 
 app = Flask(__name__)
-app.secret_key = 'ai-pos-cash-flow-secret-key-change-in-production'  # Change in production
+app.secret_key = 'ai-pos-cash-flow-secret-key-change-in-production'
 app.config['UPLOAD_FOLDER'] = 'temp_uploads'
 app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB max file size
 
 # Create upload directory
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
-
-# Add language handling function to flask_app.py
-def get_current_language():
-    """Get current language from session or default to English"""
-    return session.get('language', 'English')
-
-def set_language(language):
-    """Set language in session"""
-    session['language'] = language
-
-# Add language route to flask_app.py
-@app.route('/set_language/<language>')
-def set_language_route(language):
-    """Set the interface language"""
-    valid_languages = ['English', 'Italiano']
-    if language in valid_languages:
-        session['language'] = language
-        flash(f'Language changed to {language}', 'success')
-    else:
-        flash('Invalid language selected', 'error')
-    
-    # Redirect back to the page they came from
-    return redirect(request.referrer or url_for('index'))
 
 # Initialize AI assistant
 ai_assistant = CashFlowAIAssistant()
@@ -86,23 +58,12 @@ def format_df_as_html(df, title=None):
     </div>
     """
 
-def clean_currency_display(value):
-    """Clean and format currency values for display"""
-    if pd.isna(value):
-        return "€0.00"
-    try:
-        return f"€{float(value):,.2f}"
-    except (ValueError, TypeError):
-        return "€0.00"
-
 @app.route('/')
 def index():
-    """Main dashboard page matching app.py layout"""
+    """Main dashboard page - keep UI in English, only AI gets translated"""
     data_status = get_data_status()
-    current_language = get_current_language()
     
-    
-    # Check if we have a session and data loaded
+    # Check if we have data loaded
     has_data = all('✅' in status for status in data_status.values())
     
     # Get executive snapshot if data is loaded
@@ -119,12 +80,11 @@ def index():
                          data_status=data_status,
                          has_data=has_data,
                          snapshot_html=snapshot_html,
-                         ai_available=ai_assistant.is_available(),
-                         current_language=current_language)
+                         ai_available=ai_assistant.is_available())
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
-    """Handle file uploads - matching app.py functionality"""
+    """Handle file uploads"""
     try:
         files = {}
         file_mapping = {
@@ -208,13 +168,12 @@ def upload_files():
 
 @app.route('/analyze/<question>')
 def analyze(question):
-    """Run analysis - matching all app.py questions"""
+    """Run analysis - SIMPLIFIED language handling"""
     try:
         budget = float(request.args.get('budget', 500))
-        # Get language from session instead of request args
-        language = get_current_language()
+        # Get language from URL parameter - much simpler!
+        language = request.args.get('language', 'English')
         
-        # Rest of your analyze function stays the same...
         if question == "cash_flow":
             snap, ce, low, ai_insights = cash_eaters(ui_language=language)
             
@@ -224,8 +183,7 @@ def analyze(question):
                                  main_table=format_df_as_html(ce, "💸 Cash Drains"),
                                  secondary_table=format_df_as_html(low, "📉 Lowest Margin Products"),
                                  ai_insights=ai_insights,
-                                 show_budget_form=False,
-                                 current_language=current_language)
+                                 show_budget_form=False)
         
         elif question == "reorder":
             snap, msg, plan, ai_insights = reorder_plan(budget, ui_language=language)
@@ -238,11 +196,10 @@ def analyze(question):
                                  secondary_table="",
                                  ai_insights=ai_insights,
                                  show_budget_form=True,
-                                 current_budget=budget,
-                                 current_language=current_language)
+                                 current_budget=budget)
         
         elif question == "free_cash":
-            snap, msg, slow, ai_insights = free_up_cash(ui_language=current_language)
+            snap, msg, slow, ai_insights = free_up_cash(ui_language=language)
 
             return render_template('analysis.html',
                                  question="How much cash can I free up?",
@@ -251,14 +208,12 @@ def analyze(question):
                                  main_table=format_df_as_html(slow, "🐌 Slow-Moving Inventory"),
                                  secondary_table="",
                                  ai_insights=ai_insights,
-                                 show_budget_form=False,
-                                 current_language=current_language)
+                                 show_budget_form=False)
         
         else:
             # Executive summary with AI analysis
             snap = executive_snapshot()
             
-            # Get executive AI analysis
             try:
                 ai_insights = analyze_executive_summary(language)
             except Exception as e:
@@ -270,8 +225,7 @@ def analyze(question):
                                  main_table="",
                                  secondary_table="",
                                  ai_insights=ai_insights,
-                                 show_budget_form=False,
-                                 current_language=current_language)
+                                 show_budget_form=False)
             
     except Exception as e:
         error_msg = f"Analysis error: {str(e)}"
@@ -283,8 +237,7 @@ def analyze(question):
                              main_table="",
                              secondary_table="",
                              ai_insights="Please ensure you've uploaded all required CSV files first.",
-                             show_budget_form=False,
-                             current_language=get_current_language())
+                             show_budget_form=False)
 
 @app.route('/clear_data')
 def clear_data():
@@ -296,6 +249,7 @@ def clear_data():
         flash(f'Error clearing data: {str(e)}', 'error')
     
     return redirect(url_for('index'))
+
 
 @app.route('/api/test_connection', methods=['POST'])
 def test_api_connection():
@@ -519,35 +473,14 @@ def sample_formats():
     """Show CSV format examples"""
     return render_template('sample_formats.html')
 
-# Error handlers
-@app.errorhandler(413)
-def too_large(e):
-    flash('File too large. Maximum size is 32MB.', 'error')
-    return redirect(url_for('index'))
-
-@app.errorhandler(500)
-def internal_error(error):
-    flash('An internal error occurred. Please try again.', 'error')
-    return redirect(url_for('index'))
-
+# Keep all your existing API routes (test_connection, connect, etc.) - they don't need changes
 if __name__ == '__main__':
-    print("🚀 Starting AI Cash Flow Assistant (Flask)")
-    print("=" * 50)
-    print("📊 Professional cash flow analysis for coffee shops & restaurants")
-    print("🤖 AI-powered insights with Claude integration")
-    print("📱 Mobile-friendly interface")
-    print("🌐 Local URL: http://127.0.0.1:8000")
-    print("=" * 50)
+    print("🚀 Starting AI Cash Flow Assistant (Flask) - Simplified")
+    print("📊 English interface with multilingual AI insights")
     
-    # Check for AI availability
     if ai_assistant.is_available():
         print("✅ Claude AI integration: ACTIVE")
     else:
         print("⚠️  Claude AI integration: INACTIVE (set ANTHROPIC_API_KEY)")
     
-    print("\n🌐 Flask app is ready!")
-    print("💡 Open http://127.0.0.1:8000 in your browser")
-    print("📱 For mobile testing, use your local IP address")
-    
-    # Start Flask server (accessible from local network)
     app.run(debug=True, host='0.0.0.0', port=8000)
